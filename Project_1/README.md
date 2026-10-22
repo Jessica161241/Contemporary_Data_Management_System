@@ -14,17 +14,20 @@
 ### 项目文件结构
 ```text
 Project_1/
-├── app.py                # Flask 后端主程序，包含所有 API 路由、校验引擎和跳转推导逻辑
+├── app.py                # Flask 后端主程序，包含 API 路由、校验引擎和跳转推导逻辑
 ├── config.py             # 数据库 URI 和 JWT 密钥配置
 ├── init_db.py            # MongoDB 初始化脚本，包含 Schema Validator 与索引创建
 ├── requirements.txt      # 项目依赖清单
+├── README.md             # 项目说明文档（本文件）
+├── 测试用例.md           # 测试用例与测试结果截图记录
 ├── templates/            # 前端 HTML 页面（原生 HTML + Vanilla JS）
 │   ├── login.html        # 登录与注册页
 │   ├── dashboard.html    # 用户控制台，展示问卷列表、创建及发布
 │   ├── edit.html         # 问卷编辑器，支持动态添加题目、配置校验与跳转规则
 │   ├── fill.html         # 问卷填写页，包含前端动态路径推导与平滑滚动反馈
 │   └── stats.html        # 问卷统计页，展示选项分布、文本列表与数值平均值
-└── images/               # 测试用例截图存放目录 (详见《测试用例.md》)
+└── images/               # 测试用例截图存放目录
+```
 
 ## 二、数据库设计 (MongoDB)
 系统采用 MongoDB 作为唯一数据存储方案，充分发挥了文档数据库灵活扩展的优势。系统包含 4 个核心集合（Collection）：
