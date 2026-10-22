@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>问卷系统 · 登录</title>
+  <style>
+    :root { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; color: #172033; background: #f4f6f9; }
+    body { display: grid; min-height: 100vh; place-items: center; margin: 0; }
+    main { width: min(92vw, 380px); padding: 32px; background: #fff; border: 1px solid #e2e6ed; border-radius: 12px; box-shadow: 0 12px 35px #17203312; }
+    h1 { margin: 0 0 8px; font-size: 25px; }
+    p { color: #687386; }
+    label { display: block; margin: 18px 0 6px; font-size: 14px; font-weight: 600; }
+    input { box-sizing: border-box; width: 100%; padding: 11px 12px; border: 1px solid #ccd3df; border-radius: 7px; font: inherit; }
+    button { width: 100%; margin-top: 20px; padding: 11px; border: 0; border-radius: 7px; color: #fff; background: #2563eb; font: inherit; cursor: pointer; }
+    button.secondary { margin-top: 10px; color: #2563eb; background: #eaf1ff; }
+    .register-hint { margin-top: 22px; padding: 12px; border: 1px solid #dbe7ff; border-radius: 7px; color: #42516a; background: #f5f8ff; font-size: 14px; }
+    #message { min-height: 22px; margin-top: 16px; color: #c2410c; font-size: 14px; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>问卷系统</h1>
+    <p>登录后管理你的问卷。</p>
+    <form id="login-form">
+      <label for="username">用户名</label>
+      <input id="username" name="username" autocomplete="username" required>
+      <label for="password">密码</label>
+      <input id="password" name="password" type="password" autocomplete="current-password" required>
+      <button type="submit">登录</button>
+    </form>
+    <div class="register-hint"><strong>没有账号？请先注册</strong><br>注册后即可创建和管理问卷。</div>
+    <button id="register-button" class="secondary" type="button">注册新账号</button>
+    <div id="message" role="status"></div>
+  </main>
+  <script>
+    const API_BASE = "http://localhost:5000";
+    const form = document.querySelector("#login-form");
+    const message = document.querySelector("#message");
+
+    function showMessage(text) {
+      message.textContent = text;
+    }
+
+    function credentials() {
+      return {
+        username: document.querySelector("#username").value.trim(),
+        password: document.querySelector("#password").value
+      };
+    }
+
+    async function sendCredentials(path) {
+      const response = await fetch(`${API_BASE}${path}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(credentials())
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || "请求失败");
+      return data;
+    }
+
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      try {
+        const data = await sendCredentials("/api/login");
+        localStorage.setItem("token", data.token);
+        window.location.href = "dashboard.html";
+      } catch (error) {
+        showMessage(error.message);
+      }
+    });
+
+    document.querySelector("#register-button").addEventListener("click", async () => {
+      try {
+        await sendCredentials("/api/register");
+        showMessage("注册成功，请登录。");
+      } catch (error) {
+        showMessage(error.message);
+      }
+    });
+  </script>
+</body>
+</html>

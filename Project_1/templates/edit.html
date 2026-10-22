@@ -1,0 +1,423 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>问卷系统 · 编辑题目</title>
+  <style>
+    :root { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; color: #172033; background: #f4f6f9; }
+    body { max-width: 820px; margin: 0 auto; padding: 32px 18px 60px; }
+    header { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 24px; }
+    h1, h2 { margin: 0; } h1 { font-size: 27px; } h2 { font-size: 18px; }
+    section { margin-bottom: 22px; padding: 22px; background: #fff; border: 1px solid #e2e6ed; border-radius: 10px; }
+    .question { display: grid; grid-template-columns: 54px minmax(0, 1fr) auto auto; gap: 12px; align-items: center; padding: 14px 0; border-top: 1px solid #edf0f4; }
+    .question:first-child { border-top: 0; } .order { color: #2563eb; font-weight: 700; } .type { color: #687386; font-size: 13px; }
+    form { display: grid; gap: 12px; margin-top: 16px; } label { font-size: 14px; font-weight: 600; }
+    input, select, textarea { box-sizing: border-box; width: 100%; padding: 10px; border: 1px solid #ccd3df; border-radius: 7px; font: inherit; }
+    textarea { min-height: 90px; resize: vertical; } .choice-options { display: none; }
+    .checkbox-label { display: flex; align-items: center; gap: 8px; cursor: pointer; margin: 15px 0; }
+    .checkbox-label input { width: auto; margin: 0; }
+    .options-container { display: grid; gap: 8px; }
+    .option-row { display: grid; grid-template-columns: minmax(0, 1fr) auto 180px; gap: 8px; align-items: center; }
+    .option-row button { padding: 9px 10px; color: #991b1b; background: #fee2e2; font-size: 13px; }
+    .routing-target { display: none; }
+    .add-option { width: fit-content; padding: 8px 10px; color: #166534; background: #dcfce7; font-size: 13px; }
+    .form-actions { display: flex; gap: 8px; align-items: center; }
+    .form-actions .cancel { display: none; color: #334155; background: #e2e8f0; }
+    .config-group { display: none; padding: 12px; border: 1px solid #e2e8f0; border-radius: 8px; background: #f8fafc; }
+    .config-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+    button, .back-link { padding: 10px 14px; border: 0; border-radius: 7px; color: #fff; background: #2563eb; font: inherit; cursor: pointer; text-decoration: none; }
+    .back-link { color: #334155; background: #e2e8f0; } #message { min-height: 22px; color: #c2410c; }
+    @media (max-width: 600px) { header { align-items: flex-start; flex-direction: column; } .question { grid-template-columns: 40px 1fr; } .type { grid-column: 2; } }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>编辑问卷题目</h1>
+    <div>
+      <a id="preview-link" class="back-link" target="_blank">预览问卷</a>
+      <a class="back-link" href="dashboard.html">返回控制台</a>
+    </div>
+  </header>
+
+  <section>
+    <h2>当前题目</h2>
+    <div id="question-list">正在加载...</div>
+  </section>
+
+  <section>
+    <h2>添加题目</h2>
+    <form id="question-form">
+      <label for="question-title">题目内容</label>
+      <input id="question-title" required placeholder="请输入题目内容">
+
+      <label for="question-type">题目类型</label>
+      <select id="question-type">
+        <option value="single_choice">单选</option>
+        <option value="multiple_choice">多选</option>
+        <option value="text">文本</option>
+        <option value="number">数字</option>
+      </select>
+
+      <div id="choice-options" class="choice-options">
+        <label>选项列表</label>
+        <div id="options-container" class="options-container"></div>
+        <button id="add-option" class="add-option" type="button">+ 添加选项</button>
+        <div id="multiple-config" class="config-grid">
+          <label>最少选择数<input id="min-selected" type="number" min="0" placeholder="可选"></label>
+          <label>最多选择数<input id="max-selected" type="number" min="0" placeholder="可选"></label>
+        </div>
+      </div>
+
+      <div id="text-config" class="config-group">
+        <label>最小字数<input id="min-length" type="number" min="0" value="0"></label>
+        <label>最大字数<input id="max-length" type="number" min="0" value="500"></label>
+      </div>
+
+      <div id="number-config" class="config-group">
+        <div class="config-grid">
+          <label>最小值<input id="min-value" type="number" step="any" placeholder="可选"></label>
+          <label>最大值<input id="max-value" type="number" step="any" placeholder="可选"></label>
+        </div>
+        <label class="checkbox-label"><input id="is-integer" type="checkbox"> <span>只允许整数</span></label>
+      </div>
+
+      <label class="checkbox-label"><input id="routing-enabled" type="checkbox"> <span>是否为该题设置跳转逻辑？</span></label>
+      <div id="number-routing-config" class="config-group">
+        <label id="number-routing-single-field">数字阈值<input id="number-routing-threshold" type="number" step="any" placeholder="请输入阈值"></label>
+        <div id="number-routing-range-fields" class="config-grid">
+          <label>区间最小值<input id="number-routing-min" type="number" step="any" placeholder="请输入最小值"></label>
+          <label>区间最大值<input id="number-routing-max" type="number" step="any" placeholder="请输入最大值"></label>
+        </div>
+        <label>判断条件
+          <select id="number-routing-operator">
+            <option value="greater_than">大于</option>
+            <option value="less_than">小于</option>
+            <option value="equals">等于</option>
+            <option value="between">介于（区间）</option>
+          </select>
+        </label>
+        <label>跳转目标<select id="number-routing-target" class="number-routing-target"></select></label>
+      </div>
+
+      <label class="checkbox-label"><input id="is-required" type="checkbox"> <span>设置为必答题</span></label>
+      <div class="form-actions">
+        <button id="save-question" type="submit">保存题目</button>
+        <button id="cancel-edit" class="cancel" type="button">取消编辑</button>
+      </div>
+    </form>
+    <p id="message" role="status"></p>
+  </section>
+
+  <script>
+    const API_BASE = "http://localhost:5000";
+    const surveyId = new URLSearchParams(window.location.search).get("id");
+    const token = localStorage.getItem("token");
+    let questions = [];
+    const typeLabels = { single_choice: "单选", multiple_choice: "多选", text: "文本", number: "数字" };
+    if (!token) window.location.href = "login.html";
+    document.querySelector("#preview-link").href = `fill.html?id=${encodeURIComponent(surveyId)}&preview=1`;
+
+    const headers = () => ({
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${localStorage.getItem("token")}`
+    });
+    const escapeHtml = (value) => String(value ?? "").replace(/[&<>'"]/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" }[char]));
+
+    async function request(path, options = {}) {
+      const response = await fetch(`${API_BASE}${path}`, { ...options, headers: { ...headers(), ...(options.headers || {}) } });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || "请求失败");
+      return data;
+    }
+
+    async function loadQuestions() {
+      if (!surveyId) throw new Error("缺少问卷 ID");
+      const data = await request(`/api/surveys/${encodeURIComponent(surveyId)}/questions`);
+      questions = data.questions || [];
+      document.querySelectorAll(".routing-target").forEach((select) => targetOptionsFor(select, select.value, currentQuestionOrder()));
+      const list = document.querySelector("#question-list");
+      if (!questions.length) { list.textContent = "暂未添加题目。"; return; }
+      list.innerHTML = questions.map((question) => `
+        <article class="question">
+          <div class="order">${escapeHtml(question.order)}</div>
+          <div>${escapeHtml(question.title)}</div>
+          <div class="type">${escapeHtml(typeLabels[question.question_type] || question.question_type)}</div>
+          <button class="edit-question" data-id="${question.id}" type="button">编辑</button>
+        </article>`).join("");
+      document.querySelectorAll(".edit-question").forEach((button) => {
+        button.addEventListener("click", () => startEditing(button.dataset.id));
+      });
+    }
+
+    function currentQuestionOrder() {
+      const editingQuestion = questions.find((question) => question.id === editingQuestionId);
+      return editingQuestion
+        ? Number(editingQuestion.order)
+        : questions.reduce((max, question) => Math.max(max, Number(question.order) || 0), 0) + 1;
+    }
+
+    function targetOptionsFor(select, selectedValue = "__NEXT__", currentOrder = currentQuestionOrder()) {
+      select.innerHTML = "";
+      [["__NEXT__", "按顺序下一题"], ["__END__", "提前结束"]].forEach(([value, label]) => {
+        select.add(new Option(label, value));
+      });
+      questions.filter((question) => Number(question.order) > currentOrder).forEach((question) => {
+        select.add(new Option(`第 ${question.order} 题`, question.id));
+      });
+      select.value = [...select.options].some((option) => option.value === selectedValue) ? selectedValue : "__NEXT__";
+    }
+
+    function createOptionRow(value = "", routingTarget = "__NEXT__") {
+      const row = document.createElement("div");
+      row.className = "option-row";
+      const input = document.createElement("input");
+      input.className = "option-input";
+      input.placeholder = "请输入选项";
+      input.value = value;
+      input.required = true;
+      const removeButton = document.createElement("button");
+      removeButton.type = "button";
+      removeButton.textContent = "删除";
+      removeButton.addEventListener("click", () => {
+        if (document.querySelectorAll(".option-row").length <= 2) {
+          document.querySelector("#message").textContent = "至少保留两个选项。";
+          return;
+        }
+        row.remove();
+      });
+      const select = document.createElement("select");
+      select.className = "routing-target";
+      select.setAttribute("aria-label", "跳转目标");
+      targetOptionsFor(select, routingTarget, currentQuestionOrder());
+      row.append(input, removeButton, select);
+      document.querySelector("#options-container").append(row);
+      updateOptionsVisibility();
+    }
+
+    function resetOptions() {
+      document.querySelector("#options-container").replaceChildren();
+      createOptionRow();
+      createOptionRow();
+    }
+
+    function updateOptionsVisibility() {
+      const questionType = document.querySelector("#question-type").value;
+      const isChoice = ["single_choice", "multiple_choice"].includes(questionType);
+      const isMultiple = questionType === "multiple_choice";
+      const isText = questionType === "text";
+      const isNumber = questionType === "number";
+      const routingEnabled = document.querySelector("#routing-enabled").checked;
+      const choiceRoutingEnabled = routingEnabled && isChoice;
+      const numberRoutingEnabled = routingEnabled && isNumber;
+      document.querySelector("#choice-options").style.display = isChoice ? "block" : "none";
+      document.querySelector("#text-config").style.display = isText ? "block" : "none";
+      document.querySelector("#number-config").style.display = isNumber ? "block" : "none";
+      document.querySelector("#multiple-config").style.display = isMultiple ? "grid" : "none";
+      document.querySelectorAll(".option-input").forEach((input) => { input.required = isChoice; });
+      document.querySelectorAll(".routing-target").forEach((select) => { select.style.display = choiceRoutingEnabled ? "block" : "none"; });
+      document.querySelector("#number-routing-config").style.display = numberRoutingEnabled ? "block" : "none";
+      const isBetween = document.querySelector("#number-routing-operator").value === "between";
+      document.querySelector("#number-routing-single-field").style.display = isBetween ? "none" : "block";
+      document.querySelector("#number-routing-range-fields").style.display = isBetween ? "grid" : "none";
+      if (numberRoutingEnabled) {
+        targetOptionsFor(document.querySelector("#number-routing-target"), document.querySelector("#number-routing-target").value, currentQuestionOrder());
+      }
+      if (!isChoice && !isNumber) document.querySelector("#routing-enabled").checked = false;
+    }
+
+    document.querySelector("#question-type").addEventListener("change", updateOptionsVisibility);
+    document.querySelector("#routing-enabled").addEventListener("change", updateOptionsVisibility);
+    document.querySelector("#number-routing-operator").addEventListener("change", updateOptionsVisibility);
+    document.querySelector("#add-option").addEventListener("click", () => createOptionRow());
+    function routingTargetForRule(question, optionValue) {
+      const rule = (question.routing_rules || []).find((candidate) => {
+        const condition = (candidate.conditions || [])[0];
+        return condition && String(condition.value) === optionValue;
+      });
+      if (!rule || !rule.action) return "__NEXT__";
+      if (rule.action.type === "end") return "__END__";
+      return String(rule.action.target_question_id || "__NEXT__");
+    }
+
+    function startEditing(questionId) {
+      const question = questions.find((item) => item.id === questionId);
+      if (!question) return;
+      editingQuestionId = question.id;
+      document.querySelector("#question-title").value = question.title;
+      document.querySelector("#question-type").value = question.question_type;
+      document.querySelector("#is-required").checked = Boolean(question.is_required);
+      document.querySelector("#routing-enabled").checked = Boolean(question.routing_rules && question.routing_rules.length);
+      const config = question.config || {};
+      document.querySelector("#min-selected").value = config.min_selected ?? "";
+      document.querySelector("#max-selected").value = config.max_selected ?? "";
+      document.querySelector("#min-length").value = config.min_length ?? 0;
+      document.querySelector("#max-length").value = config.max_length ?? 500;
+      document.querySelector("#min-value").value = config.min_value ?? "";
+      document.querySelector("#max-value").value = config.max_value ?? "";
+      document.querySelector("#is-integer").checked = Boolean(config.is_integer || config.integer_only);
+      const numberRule = (question.routing_rules || [])[0];
+      const numberCondition = numberRule?.conditions?.[0];
+      document.querySelector("#number-routing-threshold").value = question.question_type === "number" && numberCondition?.operator !== "between" && numberCondition?.value !== undefined ? numberCondition.value : "";
+      document.querySelector("#number-routing-min").value = question.question_type === "number" && numberCondition?.operator === "between" ? numberCondition.min_value ?? "" : "";
+      document.querySelector("#number-routing-max").value = question.question_type === "number" && numberCondition?.operator === "between" ? numberCondition.max_value ?? "" : "";
+      document.querySelector("#number-routing-operator").value = question.question_type === "number" && numberCondition?.operator ? numberCondition.operator : "greater_than";
+      targetOptionsFor(document.querySelector("#number-routing-target"), numberRule?.action?.target_question_id || "__NEXT__", question.order);
+      document.querySelector("#options-container").replaceChildren();
+      const options = config.options || [];
+      if (options.length) {
+        options.forEach((option) => {
+          createOptionRow(option.value, routingTargetForRule(question, String(option.value)));
+        });
+      } else {
+        createOptionRow();
+        createOptionRow();
+      }
+      updateOptionsVisibility();
+      document.querySelector("#save-question").textContent = "保存修改";
+      document.querySelector("#cancel-edit").style.display = "inline-block";
+      document.querySelector("#question-form").scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+
+    function clearEditingForm() {
+      editingQuestionId = null;
+      document.querySelector("#question-form").reset();
+      resetOptions();
+      updateOptionsVisibility();
+      document.querySelector("#save-question").textContent = "保存题目";
+      document.querySelector("#cancel-edit").style.display = "none";
+    }
+
+    document.querySelector("#question-form").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const questionType = document.querySelector("#question-type").value;
+      const isChoice = ["single_choice", "multiple_choice"].includes(questionType);
+      const title = document.querySelector("#question-title").value.trim();
+      const optionValues = isChoice
+        ? [...document.querySelectorAll(".option-input")].map((input) => input.value.trim()).filter(Boolean)
+        : [];
+      if (!title) return;
+      if (["single_choice", "multiple_choice"].includes(questionType) && optionValues.length < 2) {
+        document.querySelector("#message").textContent = "选择题至少需要两个选项。";
+        return;
+      }
+
+      const message = document.querySelector("#message");
+      if (questionType === "text") {
+        const minLength = Number(document.querySelector("#min-length").value);
+        const maxLength = Number(document.querySelector("#max-length").value);
+        if (minLength > maxLength) {
+          message.textContent = "限制值设置错误（最小值不能大于最大值）";
+          return;
+        }
+      }
+      if (questionType === "number") {
+        const minValueInput = document.querySelector("#min-value").value;
+        const maxValueInput = document.querySelector("#max-value").value;
+        if (minValueInput !== "" && maxValueInput !== "" && Number(minValueInput) > Number(maxValueInput)) {
+          message.textContent = "限制值设置错误（最小值不能大于最大值）";
+          return;
+        }
+      }
+
+      const config = {
+        options: optionValues.map((value) => ({ value, label: value })),
+        min_length: questionType === "text" ? Number(document.querySelector("#min-length").value || 0) : null,
+        max_length: questionType === "text" ? Number(document.querySelector("#max-length").value || 0) : null,
+        min_value: questionType === "number" && document.querySelector("#min-value").value !== ""
+          ? Number(document.querySelector("#min-value").value)
+          : null,
+        max_value: questionType === "number" && document.querySelector("#max-value").value !== ""
+          ? Number(document.querySelector("#max-value").value)
+          : null,
+        is_integer: questionType === "number" && document.querySelector("#is-integer").checked
+      };
+      if (questionType === "multiple_choice") {
+        const minSelected = document.querySelector("#min-selected").value;
+        const maxSelected = document.querySelector("#max-selected").value;
+        config.min_selected = minSelected === "" ? 0 : Number(minSelected);
+        config.max_selected = maxSelected === "" ? optionValues.length : Number(maxSelected);
+      }
+
+      let routingRules = isChoice && document.querySelector("#routing-enabled").checked
+        ? [...document.querySelectorAll("#options-container .option-row")].map((row, index) => {
+          const option = row.querySelector(".option-input").value.trim();
+          const target = row.querySelector(".routing-target").value;
+          return {
+            rule_id: `option-${index + 1}`,
+            priority: index + 1,
+            conditions: [{ question_id: "__CURRENT_QUESTION__", operator: "equals", value: option }],
+            action: target === "__END__"
+              ? { type: "end" }
+              : { type: "goto", target_question_id: target }
+          };
+        })
+        : [];
+      if (questionType === "number" && document.querySelector("#routing-enabled").checked) {
+        const operator = document.querySelector("#number-routing-operator").value;
+        const target = document.querySelector("#number-routing-target").value;
+        const condition = { question_id: "__CURRENT_QUESTION__", operator };
+        if (operator === "between") {
+          const minValue = document.querySelector("#number-routing-min").value;
+          const maxValue = document.querySelector("#number-routing-max").value;
+          if (minValue === "" || maxValue === "") {
+            document.querySelector("#message").textContent = "请填写完整的数字区间。";
+            return;
+          }
+          if (Number(minValue) > Number(maxValue)) {
+            message.textContent = "限制值设置错误（最小值不能大于最大值）";
+            return;
+          }
+          condition.min_value = Number(minValue);
+          condition.max_value = Number(maxValue);
+        } else {
+          const threshold = document.querySelector("#number-routing-threshold").value;
+          if (threshold === "") {
+            document.querySelector("#message").textContent = "请填写数字跳转阈值。";
+            return;
+          }
+          condition.value = Number(threshold);
+        }
+        routingRules = [{
+          rule_id: "number-threshold",
+          priority: 1,
+          conditions: [condition],
+          action: target === "__END__"
+            ? { type: "end" }
+            : { type: "goto", target_question_id: target }
+        }];
+      }
+
+      const editingQuestion = questions.find((question) => question.id === editingQuestionId);
+      const wasEditing = Boolean(editingQuestionId);
+      const endpoint = editingQuestionId
+        ? `/api/surveys/${encodeURIComponent(surveyId)}/questions/${encodeURIComponent(editingQuestionId)}`
+        : `/api/surveys/${encodeURIComponent(surveyId)}/questions`;
+      try {
+        await request(endpoint, {
+          method: editingQuestionId ? "PUT" : "POST",
+          body: JSON.stringify({
+            order: editingQuestion ? editingQuestion.order : questions.reduce((max, question) => Math.max(max, Number(question.order) || 0), 0) + 1,
+            title,
+            question_type: questionType,
+            is_required: document.querySelector("#is-required").checked,
+            config,
+            routing_rules: routingRules
+          })
+        });
+        clearEditingForm();
+        document.querySelector("#message").textContent = wasEditing ? "题目修改成功。" : "题目保存成功。";
+        await loadQuestions();
+      } catch (error) {
+        document.querySelector("#message").textContent = error.message;
+      }
+    });
+
+    let editingQuestionId = null;
+    document.querySelector("#cancel-edit").addEventListener("click", clearEditingForm);
+    resetOptions();
+    updateOptionsVisibility();
+    loadQuestions().catch((error) => { document.querySelector("#question-list").textContent = error.message; });
+  </script>
+</body>
+</html>
