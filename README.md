@@ -1,4 +1,4 @@
-# Contemporary_Data_Management_System# 当代数据管理系统 (Contemporary Data Management System) - 课程作业仓库
+# 当代数据管理系统 (Contemporary Data Management System) - 课程作业仓库
 
 本仓库用于存放《当代数据管理系统》课程的所有大作业代码与文档。
 
