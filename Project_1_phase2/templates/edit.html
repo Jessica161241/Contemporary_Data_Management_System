@@ -51,6 +51,17 @@
         padding: 14px 0;
         border-top: 1px solid #edf0f4;
       }
+      .question-actions {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        white-space: nowrap;
+      }
+      .question-actions button {
+        width: auto;
+        padding: 8px 10px;
+        font-size: 13px;
+      }
       .question:first-child {
         border-top: 0;
       }
@@ -99,6 +110,25 @@
         width: auto;
         margin: 0;
       }
+      .save-mode {
+        display: none;
+        border: 1px solid #bfdbfe;
+        border-radius: 8px;
+        background: #eff6ff;
+        margin: 0 0 4px;
+        padding: 12px;
+      }
+      .save-mode-options {
+        display: grid;
+        gap: 8px;
+      }
+      .save-mode-options label {
+        display: flex;
+        align-items: flex-start;
+        gap: 8px;
+        font-weight: 400;
+      }
+      .save-mode-options input { width: auto; margin: 3px 0 0; }
       .options-container {
         display: grid;
         gap: 8px;
@@ -130,6 +160,40 @@
         gap: 8px;
         align-items: center;
       }
+      .section-heading {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+      }
+      .section-heading button {
+        padding: 8px 10px;
+        font-size: 13px;
+      }
+      dialog {
+        width: min(92vw, 620px);
+        padding: 0;
+        border: 0;
+        border-radius: 12px;
+        box-shadow: 0 20px 60px #17203333;
+      }
+      dialog::backdrop { background: #17203366; }
+      .history-dialog-body { padding: 22px; }
+      .history-dialog-body h3 { margin: 0 0 16px; }
+      .history-entry { padding: 12px 0; border-top: 1px solid #edf0f4; }
+      .history-entry:first-child { border-top: 0; }
+      .history-preview-header { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; }
+      .history-preview-title { margin: 12px 0 8px; font-weight: 600; }
+      .readonly-options { display: grid; gap: 8px; }
+      .readonly-option { display: flex; align-items: center; gap: 8px; font-weight: 400; }
+      .readonly-option input { width: auto; }
+      .readonly-field { background: #f8fafc; color: #475569; }
+      .history-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+      .import-dialog-body { padding: 22px; }
+      .import-dialog-body h3 { margin: 0 0 16px; }
+      .import-dialog-body form { margin-top: 0; }
+      .import-dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }
+      .import-dialog-actions .secondary { color: #334155; background: #e2e8f0; }
       .form-actions .cancel {
         display: none;
         color: #334155;
@@ -172,8 +236,9 @@
           flex-direction: column;
         }
         .question {
-          grid-template-columns: 40px 1fr;
+          grid-template-columns: 40px minmax(0, 1fr);
         }
+        .question-actions { grid-column: 2; }
         .type {
           grid-column: 2;
         }
@@ -185,6 +250,30 @@
       <h1>编辑问卷题目</h1>
       <div>
         <a id="preview-link" class="back-link" target="_blank">预览问卷</a>
+
+    <dialog id="question-history-dialog">
+      <div class="history-dialog-body">
+        <h3>题目修改历史</h3>
+        <div id="question-history-content"></div>
+        <div class="history-actions"><button id="close-question-history" type="button">关闭</button></div>
+      </div>
+    </dialog>
+    <dialog id="bank-import-dialog">
+      <div class="import-dialog-body">
+        <h3>从题库导入</h3>
+        <form id="bank-import-form">
+          <label for="bank-import-question">题库题目</label>
+          <select id="bank-import-question" required></select>
+          <label for="bank-import-version">题目版本</label>
+          <select id="bank-import-version" required></select>
+          <div id="bank-import-preview" class="history-preview"></div>
+        </form>
+        <div class="import-dialog-actions">
+          <button id="close-bank-import" class="secondary" type="button">取消</button>
+          <button id="confirm-bank-import" type="button">导入为快照</button>
+        </div>
+      </div>
+    </dialog>
         <a class="back-link" href="dashboard.html">返回控制台</a>
       </div>
     </header>
@@ -195,8 +284,15 @@
     </section>
 
     <section>
-      <h2>添加题目</h2>
+      <div class="section-heading">
+        <h2>添加题目</h2>
+        <button id="import-bank" type="button">从题库导入</button>
+      </div>
       <form id="question-form">
+        <fieldset id="save-mode-group" class="save-mode">
+          <legend>保存方式</legend>
+          <div id="save-mode-options" class="save-mode-options"></div>
+        </fieldset>
         <label for="question-title">题目内容</label>
         <input id="question-title" required placeholder="请输入题目内容" />
 
@@ -313,6 +409,10 @@
           ><input id="is-required" type="checkbox" />
           <span>设置为必答题</span></label
         >
+        <label id="save-to-bank-option" class="checkbox-label"
+          ><input id="save-to-bank" type="checkbox" />
+          <span>同时将此题存入我的题库（生成 v1）</span></label
+        >
         <div class="form-actions">
           <button id="save-question" type="submit">保存题目</button>
           <button id="cancel-edit" class="cancel" type="button">
@@ -365,6 +465,132 @@
         return data;
       }
 
+      const questionHistoryDialog = document.querySelector("#question-history-dialog");
+      document.querySelector("#close-question-history").addEventListener("click", () => questionHistoryDialog.close());
+      const bankImportDialog = document.querySelector("#bank-import-dialog");
+      const bankImportQuestion = document.querySelector("#bank-import-question");
+      const bankImportVersion = document.querySelector("#bank-import-version");
+      let bankImportChoices = [];
+      document.querySelector("#close-bank-import").addEventListener("click", () => bankImportDialog.close());
+      bankImportQuestion.addEventListener("change", updateBankImportVersions);
+      bankImportVersion.addEventListener("change", renderBankImportPreview);
+
+      async function showQuestionHistory(questionId) {
+        try {
+          const data = await request(`/api/surveys/${encodeURIComponent(surveyId)}/questions/${encodeURIComponent(questionId)}/history`);
+          const content = data.history.length ? data.history.map((record, index) => `<article class="history-entry">${readonlyQuestionMarkup(record.old_data, `历史版本 v${record.version}`, `question-${record.version}`)}<button class="restore-history" data-index="${index}" type="button">恢复到此版本</button></article>`).join("") : "<p>该题还没有修改历史。</p>";
+          document.querySelector("#question-history-content").innerHTML = content;
+          questionHistoryDialog.showModal();
+          document.querySelectorAll(".restore-history").forEach((button) => button.addEventListener("click", () => restoreQuestionHistory(questionId, data.history[Number(button.dataset.index)].old_data)));
+        } catch (error) {
+          document.querySelector("#message").textContent = error.message;
+        }
+      }
+
+      function readonlyQuestionMarkup(question, versionLabel, controlName) {
+        const config = question.config || {};
+        const type = question.question_type;
+        let answerMarkup = "";
+        if (type === "single_choice" || type === "multiple_choice") {
+          const inputType = type === "single_choice" ? "radio" : "checkbox";
+          const options = config.options || [];
+          answerMarkup = `<div class="readonly-options">${options.map((option) => {
+            const value = typeof option === "object" ? option.value : option;
+            const label = typeof option === "object" ? (option.label || option.value) : option;
+            return `<label class="readonly-option"><input type="${inputType}" name="${escapeHtml(controlName)}" disabled />${escapeHtml(label)}</label>`;
+          }).join("")}</div>`;
+        } else if (type === "text") {
+          answerMarkup = `<textarea class="readonly-field" disabled placeholder="文本回答"></textarea>`;
+        } else if (type === "number") {
+          answerMarkup = `<input class="readonly-field" type="number" step="any" disabled placeholder="数字回答" />`;
+        }
+        return `<div class="history-preview"><div class="history-preview-header"><strong>${escapeHtml(versionLabel)} · ${escapeHtml(typeLabels[type] || type)}</strong><span class="meta">${escapeHtml(question.updated_at || "")}</span></div><div class="history-preview-title">${escapeHtml(question.title)}</div>${answerMarkup}<div class="meta">${question.is_required ? "必答题" : "选答题"}</div></div>`;
+      }
+
+      async function restoreQuestionHistory(questionId, oldData) {
+        if (!confirm("确定恢复这个历史版本吗？恢复操作会覆盖当前题目内容。")) return;
+        try {
+          await request(`/api/surveys/${encodeURIComponent(surveyId)}/questions/${encodeURIComponent(questionId)}`, {
+            method: "PUT",
+            body: JSON.stringify({
+              order: oldData.order,
+              title: oldData.title,
+              question_type: oldData.question_type,
+              is_required: oldData.is_required,
+              config: oldData.config || {},
+              routing_rules: oldData.routing_rules || [],
+              save_to_bank: false,
+            }),
+          });
+          questionHistoryDialog.close();
+          document.querySelector("#message").textContent = "题目已恢复到历史版本。";
+          await loadQuestions();
+        } catch (error) {
+          document.querySelector("#message").textContent = error.message;
+        }
+      }
+
+      async function importFromBank() {
+        try {
+          const data = await request("/api/question_bank");
+          if (!data.questions.length) {
+            document.querySelector("#message").textContent = "题库中还没有可用题目。";
+            return;
+          }
+          bankImportChoices = await Promise.all(data.questions.map(async (question) => ({
+            question,
+            versions: (await request(`/api/question_bank/${encodeURIComponent(question.root_id)}/history`)).versions,
+          })));
+          bankImportQuestion.innerHTML = bankImportChoices.map((item, index) => `<option value="${index}">${escapeHtml(item.question.title)} · ${escapeHtml(typeLabels[item.question.question_type] || item.question.question_type)}</option>`).join("");
+          updateBankImportVersions();
+          bankImportDialog.showModal();
+        } catch (error) {
+          document.querySelector("#message").textContent = error.message;
+        }
+      }
+
+      function updateBankImportVersions() {
+        const item = bankImportChoices[Number(bankImportQuestion.value)];
+        bankImportVersion.innerHTML = item ? item.versions.map((version) => `<option value="${escapeHtml(version.version)}">v${escapeHtml(version.version)} · ${escapeHtml(version.title)}</option>`).join("") : "";
+        renderBankImportPreview();
+      }
+
+      function renderBankImportPreview() {
+        const item = bankImportChoices[Number(bankImportQuestion.value)];
+        const selectedVersion = item?.versions.find((version) => version.version === Number(bankImportVersion.value));
+        document.querySelector("#bank-import-preview").innerHTML = selectedVersion
+          ? readonlyQuestionMarkup(selectedVersion, `预览 · v${selectedVersion.version}`, "bank-import-preview-option")
+          : "";
+      }
+
+      document.querySelector("#confirm-bank-import").addEventListener("click", async () => {
+        const item = bankImportChoices[Number(bankImportQuestion.value)];
+        const version = Number(bankImportVersion.value);
+        if (!item || !Number.isInteger(version) || version < 1) return;
+        try {
+          const order = questions.reduce(
+            (max, question) => Math.max(max, Number(question.order) || 0),
+            0,
+          ) + 1;
+          await request(
+            `/api/surveys/${encodeURIComponent(surveyId)}/questions/from_bank`,
+            {
+              method: "POST",
+              body: JSON.stringify({
+                root_id: item.question.root_id,
+                version,
+                order,
+              }),
+            },
+          );
+          bankImportDialog.close();
+          document.querySelector("#message").textContent = "题库题目已导入为问卷快照。";
+          await loadQuestions();
+        } catch (error) {
+          document.querySelector("#message").textContent = error.message;
+        }
+      });
+
       async function loadQuestions() {
         if (!surveyId) throw new Error("缺少问卷 ID");
         const data = await request(
@@ -388,7 +614,10 @@
           <div class="order">${escapeHtml(question.order)}</div>
           <div>${escapeHtml(question.title)}</div>
           <div class="type">${escapeHtml(typeLabels[question.question_type] || question.question_type)}</div>
-          <button class="edit-question" data-id="${question.id}" type="button">编辑</button>
+          <div class="question-actions">
+            <button class="edit-question" data-id="${question.id}" type="button">编辑</button>
+            <button class="history-question" data-id="${question.id}" type="button">查看历史版本</button>
+          </div>
         </article>`,
           )
           .join("");
@@ -396,6 +625,9 @@
           button.addEventListener("click", () =>
             startEditing(button.dataset.id),
           );
+        });
+        document.querySelectorAll(".history-question").forEach((button) => {
+          button.addEventListener("click", () => showQuestionHistory(button.dataset.id));
         });
       }
 
@@ -531,6 +763,9 @@
       document
         .querySelector("#add-option")
         .addEventListener("click", () => createOptionRow());
+      document
+        .querySelector("#import-bank")
+        .addEventListener("click", importFromBank);
       function routingTargetForRule(question, optionValue) {
         const rule = (question.routing_rules || []).find((candidate) => {
           const condition = (candidate.conditions || [])[0];
@@ -545,6 +780,24 @@
         const question = questions.find((item) => item.id === questionId);
         if (!question) return;
         editingQuestionId = question.id;
+        document.querySelector("#save-to-bank-option").style.display = "none";
+        const saveModeGroup = document.querySelector("#save-mode-group");
+        const saveModeOptions = document.querySelector("#save-mode-options");
+        const isBankQuestion = Boolean(question.bank_root_id);
+        const saveModes = isBankQuestion
+          ? [
+              ["snapshot", "仅修改当前问卷快照（不影响题库）"],
+              ["update-bank", "同步到题库并生成新版本 (vN+1)"],
+              ["new-bank", "另存为全新的题库题目 (v1)"],
+            ]
+          : [
+              ["snapshot", "仅修改当前问卷快照"],
+              ["save-new-bank", "将修改后的题保存到题库 (生成 v1)"],
+            ];
+        saveModeOptions.innerHTML = saveModes
+          .map(([value, label], index) => `<label><input type="radio" name="save-mode" value="${value}" ${index === 0 ? "checked" : ""} /> ${label}</label>`)
+          .join("");
+        saveModeGroup.style.display = "block";
         document.querySelector("#question-title").value = question.title;
         document.querySelector("#question-type").value = question.question_type;
         document.querySelector("#is-required").checked = Boolean(
@@ -616,6 +869,9 @@
       function clearEditingForm() {
         editingQuestionId = null;
         document.querySelector("#question-form").reset();
+        document.querySelector("#save-to-bank-option").style.display = "flex";
+        document.querySelector("#save-mode-group").style.display = "none";
+        document.querySelector("#save-mode-options").replaceChildren();
         resetOptions();
         updateOptionsVisibility();
         document.querySelector("#save-question").textContent = "保存题目";
@@ -789,30 +1045,76 @@
             (question) => question.id === editingQuestionId,
           );
           const wasEditing = Boolean(editingQuestionId);
+          const saveMode = wasEditing
+            ? document.querySelector('input[name="save-mode"]:checked')?.value || "snapshot"
+            : "snapshot";
+          const shouldSaveBankVersion = saveMode === "update-bank";
+          const shouldCreateBankQuestion = ["new-bank", "save-new-bank"].includes(saveMode);
           const endpoint = editingQuestionId
             ? `/api/surveys/${encodeURIComponent(surveyId)}/questions/${encodeURIComponent(editingQuestionId)}`
             : `/api/surveys/${encodeURIComponent(surveyId)}/questions`;
+          const questionPayload = {
+            order: editingQuestion
+              ? editingQuestion.order
+              : questions.reduce(
+                  (max, question) => Math.max(max, Number(question.order) || 0),
+                  0,
+                ) + 1,
+            title,
+            question_type: questionType,
+            is_required: document.querySelector("#is-required").checked,
+            save_to_bank: wasEditing
+              ? false
+              : document.querySelector("#save-to-bank").checked,
+            config,
+            routing_rules: routingRules,
+          };
+          const bankPayload = {
+            title,
+            question_type: questionType,
+            is_required: questionPayload.is_required,
+            config,
+            routing_rules: routingRules,
+          };
           try {
             await request(endpoint, {
               method: editingQuestionId ? "PUT" : "POST",
-              body: JSON.stringify({
-                order: editingQuestion
-                  ? editingQuestion.order
-                  : questions.reduce(
-                      (max, question) =>
-                        Math.max(max, Number(question.order) || 0),
-                      0,
-                    ) + 1,
-                title,
-                question_type: questionType,
-                is_required: document.querySelector("#is-required").checked,
-                config,
-                routing_rules: routingRules,
-              }),
+              body: JSON.stringify(questionPayload),
             });
+            if (shouldSaveBankVersion && editingQuestion?.bank_root_id) {
+              await request(
+                `/api/question_bank/${encodeURIComponent(editingQuestion.bank_root_id)}`,
+                {
+                  method: "PUT",
+                  body: JSON.stringify(bankPayload),
+                },
+              );
+            }
+            if (shouldCreateBankQuestion) {
+              const createdBankQuestion = await request("/api/question_bank", {
+                method: "POST",
+                body: JSON.stringify(bankPayload),
+              });
+              if (editingQuestion?.id && createdBankQuestion.question?.root_id) {
+                await request(
+                  `/api/surveys/${encodeURIComponent(surveyId)}/questions/${encodeURIComponent(editingQuestion.id)}/bank-link`,
+                  {
+                    method: "PUT",
+                    body: JSON.stringify({
+                      bank_root_id: createdBankQuestion.question.root_id,
+                      bank_version: createdBankQuestion.question.version,
+                    }),
+                  },
+                );
+              }
+            }
             clearEditingForm();
             document.querySelector("#message").textContent = wasEditing
-              ? "题目修改成功。"
+              ? shouldSaveBankVersion
+                ? "问卷快照已修改，题库也已生成新版本。"
+                : shouldCreateBankQuestion
+                  ? "问卷快照已修改，并已另存为新的题库题目。"
+                  : "题目修改成功。"
               : "题目保存成功。";
             await loadQuestions();
           } catch (error) {

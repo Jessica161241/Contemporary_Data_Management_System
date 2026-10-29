@@ -41,6 +41,15 @@
         color: #854d0e;
         background: #fef9c3;
       }
+      #return-to-editor {
+        display: none;
+        margin-top: 10px;
+        padding: 8px 11px;
+        border-radius: 6px;
+        color: #854d0e;
+        background: #fde68a;
+        text-decoration: none;
+      }
       #jump-toast {
         visibility: hidden;
         opacity: 0;
@@ -132,7 +141,7 @@
   </head>
   <body>
     <main>
-      <div id="preview-banner">当前处于预览模式</div>
+      <div id="preview-banner">当前处于预览模式<br /><a id="return-to-editor">返回编辑界面</a></div>
       <h1 id="title">正在加载...</h1>
       <div id="jump-toast" role="status">⚡ 已触发条件跳转</div>
       <p id="description"></p>
@@ -179,6 +188,11 @@
         document.querySelector("#preview-banner").style.display = previewMode
           ? "block"
           : "none";
+        if (previewMode) {
+          const returnLink = document.querySelector("#return-to-editor");
+          returnLink.href = `edit.html?id=${encodeURIComponent(surveyId)}`;
+          returnLink.style.display = "inline-block";
+        }
         document.querySelector("#survey-form").innerHTML =
           questions.map(renderQuestion).join("") +
           '<button type="submit">提交答卷</button>';

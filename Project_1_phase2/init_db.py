@@ -79,6 +79,60 @@ SURVEY_VALIDATOR = {
 }
 
 
+QUESTION_BANK_VALIDATOR = {
+    "$jsonSchema": {
+        "bsonType": "object",
+        "required": [
+            "root_id",
+            "version",
+            "is_latest",
+            "owner_id",
+            "title",
+            "question_type",
+            "is_required",
+            "config",
+            "routing_rules",
+            "visibility",
+            "status",
+            "created_at",
+            "updated_at",
+        ],
+        "properties": {
+            "root_id": {"bsonType": "objectId"},
+            "version": {"bsonType": "int", "minimum": 1},
+            "is_latest": {"bsonType": "bool"},
+            "owner_id": {"bsonType": "objectId"},
+            "title": {"bsonType": "string", "minLength": 1, "maxLength": 200},
+            "question_type": {
+                "enum": ["single_choice", "multiple_choice", "text", "number"]
+            },
+            "is_required": {"bsonType": "bool"},
+            "config": {"bsonType": "object"},
+            "routing_rules": {"bsonType": "array"},
+            "visibility": {"enum": ["private", "shared", "public"]},
+            "status": {"enum": ["active", "archived"]},
+            "created_at": {"bsonType": "date"},
+            "updated_at": {"bsonType": "date"},
+        },
+    }
+}
+
+
+QUESTION_BANK_SHARE_VALIDATOR = {
+    "$jsonSchema": {
+        "bsonType": "object",
+        "required": ["root_id", "user_id", "role", "created_by", "created_at"],
+        "properties": {
+            "root_id": {"bsonType": "objectId"},
+            "user_id": {"bsonType": "objectId"},
+            "role": {"enum": ["reader", "editor"]},
+            "created_by": {"bsonType": "objectId"},
+            "created_at": {"bsonType": "date"},
+        },
+    }
+}
+
+
 def recreate_collection(database, name, validator=None):
     """Drop and recreate a collection so this script can safely reset the schema."""
     database[name].drop()
@@ -103,7 +157,18 @@ def initialize_database():
         users = recreate_collection(database, "users", USER_VALIDATOR)
         surveys = recreate_collection(database, "surveys", SURVEY_VALIDATOR)
         questions = recreate_collection(database, "questions")
+        question_history = recreate_collection(database, "question_history")
         responses = recreate_collection(database, "responses")
+        question_bank = recreate_collection(
+            database,
+            "question_bank",
+            QUESTION_BANK_VALIDATOR,
+        )
+        question_bank_shares = recreate_collection(
+            database,
+            "question_bank_shares",
+            QUESTION_BANK_SHARE_VALIDATOR,
+        )
 
         users.create_index(
             [("username", ASCENDING)],
@@ -128,6 +193,47 @@ def initialize_database():
             [("survey_id", ASCENDING), ("order", ASCENDING)],
             unique=True,
             name="uq_questions_survey_order",
+        )
+        questions.create_index(
+            [("bank_root_id", ASCENDING), ("bank_version", ASCENDING)],
+            name="idx_questions_bank_version",
+        )
+        questions.create_index(
+            [("bank_root_id", ASCENDING), ("survey_id", ASCENDING)],
+            name="idx_questions_bank_surveys",
+        )
+
+        question_history.create_index(
+            [("survey_id", ASCENDING), ("question_id", ASCENDING), ("version", DESCENDING)],
+            name="idx_question_history_question_version",
+        )
+
+        question_bank.create_index(
+            [("root_id", ASCENDING), ("version", ASCENDING)],
+            unique=True,
+            name="uq_question_bank_root_version",
+        )
+        question_bank.create_index(
+            [("root_id", ASCENDING), ("is_latest", ASCENDING)],
+            name="idx_question_bank_latest",
+        )
+        question_bank.create_index(
+            [("owner_id", ASCENDING), ("updated_at", DESCENDING)],
+            name="idx_question_bank_owner_updated",
+        )
+        question_bank.create_index(
+            [("visibility", ASCENDING), ("updated_at", DESCENDING)],
+            name="idx_question_bank_visibility_updated",
+        )
+
+        question_bank_shares.create_index(
+            [("root_id", ASCENDING), ("user_id", ASCENDING)],
+            unique=True,
+            name="uq_question_bank_share",
+        )
+        question_bank_shares.create_index(
+            [("user_id", ASCENDING)],
+            name="idx_question_bank_shares_user",
         )
 
         responses.create_index(

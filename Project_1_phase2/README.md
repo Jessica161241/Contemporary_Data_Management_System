@@ -1,9 +1,8 @@
-
-# 基于 MongoDB 的动态问卷系统
+# 基于 MongoDB 的动态问卷系统（第二阶段）
 
 ## 一、系统说明
-本项目是一个基于 Flask 和 MongoDB 开发的轻量级在线问卷系统，类似“问卷星”或 Google Forms。
-系统支持多用户注册登录、问卷创建与发布、复杂的动态题目跳转、前后端双端校验，以及答卷结果的聚合统计。前端采用原生 HTML/JS/CSS 编写，轻量且无需复杂的构建工具即可直接运行。
+本项目在原有问卷系统（第一阶段）的基础上进行了架构升级，以满足“题目复用、多版本管理、共享与跨问卷统计”的复杂业务需求。
+通过引入独立的**题库系统（Question Bank）**与**快照隔离机制（Snapshot Isolation）**，系统实现了题目模板的版本树演进，同时保证已发布旧问卷的数据绝对安全。
 
 **技术栈**：
 - 后端：Python 3 + Flask
@@ -13,49 +12,64 @@
 
 ### 项目文件结构
 ```text
-Project_1/
-├── app.py                # Flask 后端主程序，包含 API 路由、校验引擎和跳转推导逻辑
+Project_1_phase2/
+├── app.py                # Flask 后端主程序，包含 API 路由与复杂聚合管道
 ├── config.py             # 数据库 URI 和 JWT 密钥配置
-├── init_db.py            # MongoDB 初始化脚本，包含 Schema Validator 与索引创建
+├── init_db.py            # MongoDB 初始化脚本，包含 Schema Validator 与索引
 ├── requirements.txt      # 项目依赖清单
 ├── README.md             # 项目说明文档（本文件）
-├── 测试用例.md           # 测试用例与测试结果截图记录
-├── templates/            # 前端 HTML 页面（原生 HTML + Vanilla JS）
-│   ├── login.html        # 登录与注册页
-│   ├── dashboard.html    # 用户控制台，展示问卷列表、创建及发布
-│   ├── edit.html         # 问卷编辑器，支持动态添加题目、配置校验与跳转规则
-│   ├── fill.html         # 问卷填写页，包含前端动态路径推导与平滑滚动反馈
-│   └── stats.html        # 问卷统计页，展示选项分布、文本列表与数值平均值
-└── images/               # 测试用例截图存放目录
+├── 测试用例.md           # 测试用例与截图记录
+├── templates/            # 前端 HTML 页面
+│   ├── login.html        # 登录与注册
+│   ├── dashboard.html    # 用户控制台（我的问卷）
+│   ├── edit.html         # 问卷编辑器（支持快照导入与双轨修改）
+│   ├── fill.html         # 问卷填写页
+│   ├── stats.html        # 单问卷统计页
+│   └── bank.html         # 题库管理页（版本树、共享、跨问卷统计）
+└── images/               # 测试截图目录
 ```
 
 ## 二、数据库设计 (MongoDB)
-系统采用 MongoDB 作为唯一数据存储方案，充分发挥了文档数据库灵活扩展的优势。系统包含 4 个核心集合（Collection）：
-1. **users**：存储用户信息（用户名唯一索引、密码哈希、注册时间）。
-2. **surveys**：存储问卷信息（标题、说明、状态 draft/published/closed、截止时间、创建者 ID）。
-3. **questions**：存储题目，采用 `config` 嵌套文档兼容单选、多选、文本、数字四种题型。**跳转规则 `routing_rules` 以 JSON 数组形式原生存储**。
-4. **responses**：存储答卷，`answers` 字段利用数组存储动态答案，并记录 `visited_question_ids`。
+第二阶段在保留第一阶段集合（`users`、`surveys`、`questions`、`responses`）的基础上，新增了两个核心集合，并扩展了字段。
 
-**为什么选择 MongoDB？**
-关系型数据库处理“动态题型配置”和“复杂跳转规则”需要设计极多的关联表，且修改扩展极其困难。MongoDB 的文档模型允许我们将题目的配置项（如选项列表、限制范围）和跳转规则作为嵌套文档直接存储，读写高效，且完美支持系统在第二阶段的扩展需求。
+1. **`question_bank` (题库集合)**：存放可复用的题目模板。
+   - 核心字段：`root_id` (题目永久逻辑 ID)、`version` (版本号)、`is_latest` (是否为最新版)、`owner_id`、`visibility` (private/shared/public)。
+   - 设计理念：通过 `root_id` 将同一道题的多个版本（v1, v2...）绑定成一棵版本树。
+2. **`question_bank_shares` (题库共享集合)**：记录题目的分享权限（`root_id`, `user_id`, `role`）。
+3. **`question_history` (原生题历史集合)**：记录问卷内纯手敲题目的修改历史（`question_id`, `version`, `old_data`）。
+4. **`questions` (问卷题目集合 - 扩展)**：新增了 `bank_root_id`、`bank_version`、`source_bank_version_id` 等字段，使其成为题库题目的**不可变快照**。
 
 ## 三、API 说明
-所有的业务接口均位于 `/api/` 路径下，核心接口如下：
-- `POST /api/register`：用户注册，密码使用 scrypt 加盐哈希。
-- `POST /api/login`：用户登录，返回 JWT Token。
-- `POST /api/surveys`：创建问卷（需鉴权）。
-- `POST /api/surveys/<survey_id>/questions`：为问卷添加题目（包含跳转配置，需鉴权）。
-- `GET /api/surveys/<survey_id>/fill`：获取用于填写的问卷（支持草稿预览）。
-- `POST /api/surveys/<survey_id>/submit`：提交答卷，进行严格的后端规则校验。
-- `GET /api/surveys/<survey_id>/stats`：获取聚合统计结果（需鉴权）。
+所有新增业务接口均位于 `/api/question_bank/` 和扩展的问卷接口下。
+
+**题库管理 API**：
+- `POST /api/question_bank`：创建题库题目（生成 v1 版本）。
+- `GET /api/question_bank`：获取当前用户创建的及共享给自己的最新版题目。
+- `PUT /api/question_bank/<root_id>`：更新题库（自动将旧版本设为 `is_latest=false`，生成 vN+1）。
+- `GET /api/question_bank/<root_id>/history`：获取该题的历史版本树。
+- `POST /api/question_bank/<root_id>/revert/<version>`：**一键回滚**（将指定旧版本的 `is_latest` 改为 True，不产生新版本）。
+- `POST /api/question_bank/<root_id>/share`：共享题目给指定用户。
+- `DELETE /api/question_bank/<root_id>`：删除题目（如已被问卷引用，则拦截拒绝）。
+- `GET /api/question_bank/<root_id>/usage`：查询该题被哪些问卷引用。
+- `GET /api/question_bank/<root_id>/stats`：**跨问卷统计**（按版本隔离，聚合所有关联问卷的数据）。
+
+**问卷题目扩展 API**：
+- `POST /api/surveys/<survey_id>/questions/from_bank`：从题库深拷贝快照至问卷。
+- `PUT /api/surveys/<survey_id>/questions/<question_id>/bank-link`：手动关联或同步快照与题库。
 
 ## 四、关键逻辑说明
-1. **动态跳转逻辑（Routing Rules）**：
-   题目跳转不写死在代码中，而是通过前端的可视化配置，在题库中存入 `routing_rules`。填写时，前端通过 JS 实时比对用户的答案，动态计算路径（隐藏无关题目）。提交时，根据 `visited_question_ids` 记录实际访问路径。
-2. **后端防御与校验引擎**：
-   为了防作弊与死循环，后端实现了 `validate_answers` 引擎。它会校验所有被访问题目的答案合法性（包括必答、数字范围、字数限制等），并通过 `detect_routing_cycle` 检测路径是否有环，确保数据绝对安全。
-3. **统计聚合**：
-   使用 MongoDB 的 `$facet`、`$unwind` 和 `$group` 等高级聚合管道，在一次数据库查询中同时完成选项计数、文本收集和数字平均值计算，性能优异。
+1. **快照隔离机制 (Snapshot Isolation)**：
+   - 当从题库导入题目时，系统采用**深拷贝**将题目完整内容复制到 `questions` 集合。
+   - 无论后续题库中的模板如何升级，问卷中的这道快照题都不会受到影响。这完美满足了需求：*“修改题目时不要影响已经做好的问卷”*。
+2. **双轨制修改与分支逻辑**：
+   - 在问卷编辑页修改带有 `bank_root_id` 的快照题时，前端会提供三种分支选项：
+     1. 仅修改当前问卷快照（不影响题库）。
+     2. 同步到题库并生成新版本（vN+1）。
+     3. 另存为全新的题库题目（生成新 v1）。
+3. **跨问卷统计引擎**：
+   - 通过 `root_id` 关联不同问卷里的快照。
+   - 在 MongoDB 的 `$facet` 聚合管道中，按 `bank_version` 进行严格分组，避免不同版本的题型差异（如 v1 是数字题，v2 是单选题）导致数据混淆。
+   - 实现了版本切换、总引用数、总回答数及各问卷明细的溯源查询。
 
 ## 五、如何运行
 1. 安装依赖：`pip install -r requirements.txt`
@@ -75,8 +89,11 @@ Project_1/
 2. **数据库连接配置 (`config.py`)**
    系统默认连接本地 MongoDB 的 `survey_db`，也可通过环境变量覆盖：
    - `MONGO_URI`：MongoDB 连接地址（默认 `mongodb://localhost:27017/survey_db`）
-   - `JWT_SECRET_KEY`：用于签发登录 Token 的密钥（建议在生产环境中通过环境变量注入）
+   - `JWT_SECRET_KEY`：用于签发登录 Token 的密钥
    - `JWT_EXPIRES_HOURS`：Token 的有效期（默认 24 小时）
 
 3. **前端 API 地址配置**
-   前端页面中的请求地址（`API_BASE`）默认指向 `http://localhost:5000`。如果部署到服务器，需在 `login.html`、`dashboard.html`、`edit.html`、`fill.html`、`stats.html` 中统一修改 `API_BASE` 变量。
+   前端页面中的请求地址（`API_BASE`）默认指向 `http://localhost:5000`。若部署到服务器，需在 `templates` 下的所有 HTML 文件中统一修改 `API_BASE` 变量。
+
+4. **数据库初始化 (`init_db.py`)**
+   运行 `python init_db.py` 将自动创建第二阶段的全部集合（含 Validator 校验与索引），并清空旧测试数据。

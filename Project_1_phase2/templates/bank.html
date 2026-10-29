@@ -1,0 +1,525 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>问卷系统 · 我的题库</title>
+    <style>
+      :root { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; color: #172033; background: #f4f6f9; }
+      body { max-width: 900px; margin: 0 auto; padding: 32px 18px 60px; }
+      header { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 24px; }
+      h1, h2 { margin: 0; } h1 { font-size: 27px; } h2 { font-size: 18px; }
+      section { margin-bottom: 22px; padding: 22px; background: #fff; border: 1px solid #e2e6ed; border-radius: 10px; }
+      form { display: grid; gap: 12px; margin-top: 16px; }
+      input, select, textarea { box-sizing: border-box; width: 100%; padding: 10px; border: 1px solid #ccd3df; border-radius: 7px; font: inherit; }
+      textarea { min-height: 80px; resize: vertical; }
+      button, .back-link { padding: 10px 14px; border: 0; border-radius: 7px; color: #fff; background: #2563eb; font: inherit; cursor: pointer; text-decoration: none; }
+      .back-link { color: #334155; background: #e2e8f0; }
+      .checkbox-label { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+      .checkbox-label input { width: auto; }
+      .config-group { display: none; padding: 12px; border: 1px solid #e2e8f0; border-radius: 8px; background: #f8fafc; }
+      .options-container { display: grid; gap: 8px; }
+      .option-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }
+      .option-row button { color: #991b1b; background: #fee2e2; padding: 8px 10px; }
+      .add-option { width: fit-content; color: #166534; background: #dcfce7; padding: 8px 10px; }
+      .config-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+      .bank-item { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 14px 0; border-top: 1px solid #edf0f4; }
+      .bank-item:first-child { border-top: 0; }
+      .meta { margin-top: 5px; color: #687386; font-size: 13px; }
+      .actions { display: flex; flex-wrap: wrap; gap: 8px; }
+      .actions button { padding: 8px 10px; font-size: 13px; }
+      .save-mode { display: grid; gap: 8px; }
+      .save-mode label { display: flex; align-items: flex-start; gap: 8px; font-weight: 400; }
+      .save-mode input { width: auto; margin: 3px 0 0; }
+      .survey-stat-row { display: flex; justify-content: space-between; gap: 12px; padding: 10px 0; border-top: 1px solid #edf0f4; }
+      .survey-stat-row:first-child { border-top: 0; }
+      .actions .delete { color: #fff; background: #ef4444; border: none; }
+      .muted { color: #334155; background: #e2e8f0; }
+      dialog { width: min(92vw, 560px); padding: 0; border: 0; border-radius: 12px; box-shadow: 0 20px 60px #17203333; color: #172033; }
+      dialog::backdrop { background: #17203366; }
+      .dialog-body { padding: 22px; }
+      .dialog-body h3 { margin: 0 0 16px; }
+      .dialog-content { display: grid; gap: 12px; max-height: 55vh; overflow: auto; }
+      .dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; }
+      .dialog-actions .secondary { color: #334155; background: #e2e8f0; }
+      .save-mode { display: grid; gap: 8px; padding: 12px; border: 1px solid #e2e8f0; border-radius: 8px; background: #f8fafc; }
+      .save-mode label { display: flex; align-items: center; gap: 8px; font-weight: 400; }
+      .save-mode input { width: auto; }
+      .stat-item { padding: 10px; border-top: 1px solid #edf0f4; }
+      .option { display: grid; grid-template-columns: 1fr auto; gap: 12px; margin-top: 9px; padding: 9px 10px; background: #f8fafc; border-radius: 6px; }
+      .value-list { margin: 10px 0 0; padding-left: 20px; color: #475569; }
+      .number-stat { display: flex; flex-wrap: wrap; gap: 18px; margin-top: 10px; color: #475569; }
+      .usage-list { display: grid; gap: 8px; }
+      .history-preview { padding: 12px 0; border-top: 1px solid #edf0f4; }
+      .history-preview:first-child { border-top: 0; }
+      .history-preview-header { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; }
+      .history-preview-title { margin: 12px 0 8px; font-weight: 600; }
+      .readonly-options { display: grid; gap: 8px; }
+      .readonly-option { display: flex; align-items: center; gap: 8px; font-weight: 400; }
+      .readonly-option input { width: auto; }
+      .readonly-field { background: #f8fafc; color: #475569; }
+      #toast {
+        position: fixed;
+        z-index: 1000;
+        top: 22px;
+        left: 50%;
+        width: max-content;
+        max-width: min(90vw, 560px);
+        padding: 12px 18px;
+        border-radius: 9px;
+        color: #fff;
+        background: #15803d;
+        box-shadow: 0 10px 30px #17203333;
+        opacity: 0;
+        transform: translate(-50%, -12px);
+        pointer-events: none;
+        transition: opacity 0.22s ease, transform 0.22s ease;
+      }
+      #toast.visible { opacity: 1; transform: translate(-50%, 0); }
+      #toast.error { background: #b91c1c; }
+      #toast.success { background: #15803d; }
+      @media (max-width: 600px) { header, .bank-item { align-items: flex-start; flex-direction: column; } }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>我的题库</h1>
+      <a class="back-link" href="dashboard.html">返回控制台</a>
+    </header>
+
+    <section>
+      <h2>创建题库题目</h2>
+      <form id="bank-form">
+        <input id="title" placeholder="题目内容" required />
+        <select id="question-type">
+          <option value="single_choice">单选</option>
+          <option value="multiple_choice">多选</option>
+          <option value="text">文本</option>
+          <option value="number">数字</option>
+        </select>
+        <div id="choice-config" class="config-group">
+          <label>选项列表</label>
+          <div id="options-container" class="options-container"></div>
+          <button id="add-option" class="add-option" type="button">+ 添加选项</button>
+          <div id="multiple-config" class="config-grid">
+            <label>最少选择数<input id="min-selected" type="number" min="0" /></label>
+            <label>最多选择数<input id="max-selected" type="number" min="0" /></label>
+          </div>
+        </div>
+        <div id="text-config" class="config-group">
+          <label>最小字数<input id="min-length" type="number" min="0" value="0" /></label>
+          <label>最大字数<input id="max-length" type="number" min="0" value="500" /></label>
+        </div>
+        <div id="number-config" class="config-group">
+          <div class="config-grid">
+            <label>最小值<input id="min-value" type="number" step="any" /></label>
+            <label>最大值<input id="max-value" type="number" step="any" /></label>
+          </div>
+          <label class="checkbox-label"><input id="is-integer" type="checkbox" /> 只允许整数</label>
+        </div>
+        <label class="checkbox-label"><input id="is-required" type="checkbox" /> 必答题</label>
+        <button type="submit">保存到题库</button>
+      </form>
+    </section>
+
+    <section>
+      <h2>最新题目</h2>
+      <div id="bank-list">正在加载...</div>
+    </section>
+
+    <dialog id="bank-dialog">
+      <form id="dialog-form" class="dialog-body">
+        <h3 id="dialog-title"></h3>
+        <div id="dialog-content" class="dialog-content"></div>
+        <div class="dialog-actions">
+          <button id="dialog-cancel" class="secondary" type="button">关闭</button>
+          <button id="dialog-confirm" type="submit">确定</button>
+        </div>
+      </form>
+    </dialog>
+
+    <div id="toast" role="status" aria-live="polite"></div>
+
+    <script>
+      const API_BASE = "http://localhost:5000";
+      const token = localStorage.getItem("token");
+      if (!token) window.location.href = "login.html";
+      const typeLabels = { single_choice: "单选", multiple_choice: "多选", text: "文本", number: "数字" };
+      const escapeHtml = (value) => String(value ?? "").replace(/[&<>'"]/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" }[char]));
+      const headers = () => ({ "Content-Type": "application/json", Authorization: `Bearer ${localStorage.getItem("token")}` });
+      const dialog = document.querySelector("#bank-dialog");
+      const dialogForm = document.querySelector("#dialog-form");
+      const toast = document.querySelector("#toast");
+      let dialogHandler = null;
+      let toastTimer = null;
+
+      function showToast(message, isError = false) {
+        window.clearTimeout(toastTimer);
+        toast.textContent = message;
+        toast.classList.toggle("error", isError);
+        toast.classList.toggle("success", !isError);
+        toast.classList.add("visible");
+        toast.setAttribute("role", isError ? "alert" : "status");
+        toastTimer = window.setTimeout(() => {
+          toast.classList.remove("visible");
+        }, 3000);
+      }
+
+      async function request(path, options = {}) {
+        const response = await fetch(`${API_BASE}${path}`, { ...options, headers: { ...headers(), ...(options.headers || {}) } });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(data.error || "请求失败");
+        return data;
+      }
+
+      function openDialog(title, content, handler = null, confirmText = "确定") {
+        document.querySelector("#dialog-title").textContent = title;
+        document.querySelector("#dialog-content").innerHTML = content;
+        document.querySelector("#dialog-confirm").textContent = confirmText;
+        document.querySelector("#dialog-confirm").hidden = !handler;
+        dialogHandler = handler;
+        dialog.showModal();
+      }
+
+      document.querySelector("#dialog-cancel").addEventListener("click", () => dialog.close());
+      dialogForm.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        if (!dialogHandler) { dialog.close(); return; }
+        try {
+          await dialogHandler(new FormData(dialogForm));
+          dialog.close();
+        } catch (error) {
+          showToast(error.message, true);
+        }
+      });
+
+      function updateConfigVisibility() {
+        const type = document.querySelector("#question-type").value;
+        const isChoice = ["single_choice", "multiple_choice"].includes(type);
+        document.querySelector("#choice-config").style.display = isChoice ? "block" : "none";
+        document.querySelector("#text-config").style.display = type === "text" ? "block" : "none";
+        document.querySelector("#number-config").style.display = type === "number" ? "block" : "none";
+        document.querySelector("#multiple-config").style.display = type === "multiple_choice" ? "grid" : "none";
+        document.querySelectorAll(".option-input").forEach((input) => { input.required = isChoice; });
+      }
+
+      function createOptionRow(value = "") {
+        const row = document.createElement("div");
+        row.className = "option-row";
+        const input = document.createElement("input");
+        input.className = "option-input";
+        input.placeholder = "请输入选项";
+        input.value = value;
+        input.required = true;
+        const remove = document.createElement("button");
+        remove.type = "button";
+        remove.textContent = "删除";
+        remove.addEventListener("click", () => {
+          if (document.querySelectorAll(".option-row").length <= 2) {
+            showToast("至少保留两个选项。", true);
+            return;
+          }
+          row.remove();
+        });
+        row.append(input, remove);
+        document.querySelector("#options-container").append(row);
+        updateConfigVisibility();
+      }
+
+      function resetOptions() {
+        document.querySelector("#options-container").replaceChildren();
+        createOptionRow();
+        createOptionRow();
+      }
+
+      async function loadBank() {
+        const list = document.querySelector("#bank-list");
+        try {
+          const data = await request("/api/question_bank");
+          if (!data.questions.length) { list.textContent = "题库中还没有题目。"; return; }
+          list.innerHTML = data.questions.map((question) => `
+            <article class="bank-item">
+              <div><strong>${escapeHtml(question.title)}</strong><div class="meta">${escapeHtml(typeLabels[question.question_type] || question.question_type)} · v${question.version}${question.is_shared ? ` · 共享自：${escapeHtml(question.shared_owner || "其他用户")}` : ""}</div></div>
+              <div class="actions"><button class="muted history" data-root="${question.root_id}" type="button">查看历史</button><button class="muted usage" data-root="${question.root_id}" type="button">查看引用</button><button class="muted stats" data-root="${question.root_id}" type="button">跨问卷统计</button>${question.is_shared ? "" : `<button class="edit" data-root="${question.root_id}" type="button">修改</button><button class="share" data-root="${question.root_id}" type="button">分享</button><button class="muted delete" data-root="${question.root_id}" type="button">删除</button>`}</div>
+            </article>`).join("");
+          document.querySelectorAll(".history").forEach((button) => button.addEventListener("click", () => showHistory(button.dataset.root)));
+          document.querySelectorAll(".edit").forEach((button) => button.addEventListener("click", () => editQuestion(button.dataset.root)));
+          document.querySelectorAll(".share").forEach((button) => button.addEventListener("click", () => shareQuestion(button.dataset.root)));
+          document.querySelectorAll(".usage").forEach((button) => button.addEventListener("click", () => showUsage(button.dataset.root)));
+          document.querySelectorAll(".stats").forEach((button) => button.addEventListener("click", () => showStats(button.dataset.root)));
+          document.querySelectorAll(".delete").forEach((button) => button.addEventListener("click", () => deleteQuestion(button.dataset.root)));
+        } catch (error) { list.textContent = error.message; showToast(error.message, true); }
+      }
+
+      async function showHistory(rootId) {
+        try {
+          const data = await request(`/api/question_bank/${rootId}/history`);
+          const content = data.versions.map((item, index) => `${readonlyQuestionMarkup(item, `v${item.version}`, `bank-${item.version}`)}<button class="use-version" data-index="${index}" type="button">使用此版本</button>`).join("");
+          openDialog("题目历史版本", content || "暂无历史版本");
+          document.querySelectorAll(".use-version").forEach((button) => button.addEventListener("click", () => useBankVersion(rootId, data.versions[Number(button.dataset.index)])));
+        } catch (error) { showToast(error.message, true); }
+      }
+
+      function readonlyQuestionMarkup(question, versionLabel, controlName) {
+        const config = question.config || {};
+        const type = question.question_type;
+        let answerMarkup = "";
+        if (type === "single_choice" || type === "multiple_choice") {
+          const inputType = type === "single_choice" ? "radio" : "checkbox";
+          const options = config.options || [];
+          answerMarkup = `<div class="readonly-options">${options.map((option) => {
+            const value = typeof option === "object" ? option.value : option;
+            const label = typeof option === "object" ? (option.label || option.value) : option;
+            return `<label class="readonly-option"><input type="${inputType}" name="${escapeHtml(controlName)}" disabled />${escapeHtml(label)}</label>`;
+          }).join("")}</div>`;
+        } else if (type === "text") {
+          answerMarkup = `<textarea class="readonly-field" disabled placeholder="文本回答"></textarea>`;
+        } else if (type === "number") {
+          answerMarkup = `<input class="readonly-field" type="number" step="any" disabled placeholder="数字回答" />`;
+        }
+        return `<article class="history-preview"><div class="history-preview-header"><strong>${escapeHtml(versionLabel)} · ${escapeHtml(typeLabels[type] || type)}</strong><span class="meta">${escapeHtml(question.updated_at || "")}</span></div><div class="history-preview-title">${escapeHtml(question.title)}</div>${answerMarkup}<div class="meta">${question.is_required ? "必答题" : "选答题"}</div></article>`;
+      }
+
+      function bankEditorMarkup() {
+        return `<div id="bank-editor"><label>题目内容<input id="dialog-bank-title" required /></label><label>题目类型<select id="dialog-bank-type"><option value="single_choice">单选</option><option value="multiple_choice">多选</option><option value="text">文本</option><option value="number">数字</option></select></label><div id="dialog-bank-choice" class="config-group"><label>选项列表</label><div id="dialog-options-container" class="options-container"></div><button id="dialog-add-option" class="add-option" type="button">+ 添加选项</button><div id="dialog-multiple-config" class="config-grid"><label>最少选择数<input id="dialog-min-selected" type="number" min="0" /></label><label>最多选择数<input id="dialog-max-selected" type="number" min="0" /></label></div></div><div id="dialog-bank-text" class="config-group"><label>最小字数<input id="dialog-min-length" type="number" min="0" /></label><label>最大字数<input id="dialog-max-length" type="number" min="0" /></label></div><div id="dialog-bank-number" class="config-group"><div class="config-grid"><label>最小值<input id="dialog-min-value" type="number" step="any" /></label><label>最大值<input id="dialog-max-value" type="number" step="any" /></label></div><label class="checkbox-label"><input id="dialog-is-integer" type="checkbox" /> 只允许整数</label></div><label class="checkbox-label"><input id="dialog-is-required" type="checkbox" /> 必答题</label><div class="save-mode"><strong>保存方式</strong><label><input type="radio" name="save-mode" value="update" checked /> 更新当前版本（生成 vN+1）</label><label><input type="radio" name="save-mode" value="new" /> 另存为全新题目（生成新 v1）</label></div></div>`;
+      }
+
+      function createDialogOptionRow(value = "") {
+        const row = document.createElement("div");
+        row.className = "option-row";
+        const input = document.createElement("input");
+        input.className = "dialog-option-input";
+        input.value = value;
+        input.required = true;
+        const remove = document.createElement("button");
+        remove.type = "button";
+        remove.textContent = "删除";
+        remove.addEventListener("click", () => row.remove());
+        row.append(input, remove);
+        document.querySelector("#dialog-options-container").append(row);
+      }
+
+      function updateDialogEditor() {
+        const type = document.querySelector("#dialog-bank-type").value;
+        const isChoice = ["single_choice", "multiple_choice"].includes(type);
+        document.querySelector("#dialog-bank-choice").style.display = isChoice ? "block" : "none";
+        document.querySelector("#dialog-bank-text").style.display = type === "text" ? "block" : "none";
+        document.querySelector("#dialog-bank-number").style.display = type === "number" ? "block" : "none";
+        document.querySelector("#dialog-multiple-config").style.display = type === "multiple_choice" ? "grid" : "none";
+        document.querySelectorAll(".dialog-option-input").forEach((input) => { input.required = isChoice; });
+      }
+
+      function updateBankSaveModeLabel() {
+        const mode = document.querySelector('input[name="save-mode"]:checked')?.value;
+        document.querySelector("#dialog-confirm").textContent = mode === "new" ? "另存为新题目" : "保存新版本";
+      }
+
+      function setupBankEditor(question) {
+        document.querySelector("#dialog-bank-title").value = question.title || "";
+        document.querySelector("#dialog-bank-type").value = question.question_type;
+        document.querySelector("#dialog-is-required").checked = Boolean(question.is_required);
+        const config = question.config || {};
+        document.querySelector("#dialog-min-selected").value = config.min_selected ?? "";
+        document.querySelector("#dialog-max-selected").value = config.max_selected ?? "";
+        document.querySelector("#dialog-min-length").value = config.min_length ?? 0;
+        document.querySelector("#dialog-max-length").value = config.max_length ?? 500;
+        document.querySelector("#dialog-min-value").value = config.min_value ?? "";
+        document.querySelector("#dialog-max-value").value = config.max_value ?? "";
+        document.querySelector("#dialog-is-integer").checked = Boolean(config.is_integer || config.integer_only);
+        const options = config.options || [];
+        const container = document.querySelector("#dialog-options-container");
+        container.replaceChildren();
+        (options.length ? options : [{ value: "" }, { value: "" }]).forEach((option) => createDialogOptionRow(option.value));
+        document.querySelector("#dialog-bank-type").addEventListener("change", updateDialogEditor);
+        document.querySelector("#dialog-add-option").addEventListener("click", () => createDialogOptionRow());
+        document.querySelectorAll('input[name="save-mode"]').forEach((input) => input.addEventListener("change", updateBankSaveModeLabel));
+        updateDialogEditor();
+        updateBankSaveModeLabel();
+      }
+
+      function collectBankEditor() {
+        const type = document.querySelector("#dialog-bank-type").value;
+        const isChoice = ["single_choice", "multiple_choice"].includes(type);
+        const optionValues = isChoice ? [...document.querySelectorAll(".dialog-option-input")].map((input) => input.value.trim()).filter(Boolean) : [];
+        if (isChoice && optionValues.length < 2) throw new Error("选择题至少需要两个选项");
+        const config = { options: optionValues.map((value) => ({ value, label: value })), min_length: type === "text" ? Number(document.querySelector("#dialog-min-length").value || 0) : null, max_length: type === "text" ? Number(document.querySelector("#dialog-max-length").value || 0) : null, min_value: type === "number" && document.querySelector("#dialog-min-value").value !== "" ? Number(document.querySelector("#dialog-min-value").value) : null, max_value: type === "number" && document.querySelector("#dialog-max-value").value !== "" ? Number(document.querySelector("#dialog-max-value").value) : null, is_integer: type === "number" && document.querySelector("#dialog-is-integer").checked };
+        if (type === "multiple_choice") { config.min_selected = Number(document.querySelector("#dialog-min-selected").value || 0); config.max_selected = Number(document.querySelector("#dialog-max-selected").value || optionValues.length); }
+        return { title: document.querySelector("#dialog-bank-title").value.trim(), question_type: type, is_required: document.querySelector("#dialog-is-required").checked, config, routing_rules: [] };
+      }
+
+      async function editQuestion(rootId) {
+        let current;
+        try {
+          current = (await request("/api/question_bank")).questions.find((item) => item.root_id === rootId);
+        } catch (error) {
+          showToast(error.message, true);
+          return;
+        }
+        if (!current) { showToast("找不到要修改的题目。", true); return; }
+        const collectAndValidate = () => {
+          const data = collectBankEditor();
+          if (!data.title) throw new Error("题目内容不能为空");
+          return data;
+        };
+        openDialog("修改题目", bankEditorMarkup(), async () => {
+          const data = collectAndValidate();
+          const mode = document.querySelector('input[name="save-mode"]:checked')?.value;
+          const newQuestionPayload = {
+            title: data.title,
+            question_type: data.question_type,
+            is_required: data.is_required,
+            config: data.config,
+            routing_rules: data.routing_rules,
+          };
+          let endpoint;
+          let method;
+          let payload;
+          if (mode === "new") {
+            endpoint = "/api/question_bank";
+            method = "POST";
+            payload = newQuestionPayload;
+          } else if (mode === "update") {
+            endpoint = `/api/question_bank/${encodeURIComponent(rootId)}`;
+            method = "PUT";
+            payload = { ...newQuestionPayload };
+          } else {
+            throw new Error("请选择保存方式");
+          }
+          console.log("Saving question bank item", { endpoint, method, payload });
+          await request(endpoint, { method, body: JSON.stringify(payload) });
+          const isNewQuestion = mode === "new";
+          showToast(isNewQuestion ? "已另存为新题目（v1）。" : "已生成新版本。");
+          await loadBank();
+        }, "保存新版本");
+        setupBankEditor(current);
+      }
+
+      async function useBankVersion(rootId, version) {
+        if (!confirm("确定要将该历史版本恢复为该版本吗？")) return;
+        try {
+          await request(
+            `/api/question_bank/${encodeURIComponent(rootId)}/revert/${encodeURIComponent(version.version)}`,
+            { method: "POST" },
+          );
+          dialog.close();
+          await loadBank();
+          showToast(`已成功切换至 v${version.version} 版本`);
+        } catch (error) {
+          showToast(error.message, true);
+        }
+      }
+
+      async function shareQuestion(rootId) {
+        openDialog("分享题目", '<label>目标用户名<input name="username" placeholder="请输入用户名" required /></label>', async (formData) => {
+          const username = String(formData.get("username") || "").trim();
+          if (!username) throw new Error("请输入目标用户名");
+          await request(`/api/question_bank/${rootId}/share`, { method: "POST", body: JSON.stringify({ username }) });
+          showToast("题目共享成功。");
+          await loadBank();
+        }, "确认分享");
+      }
+
+      async function deleteQuestion(rootId) {
+        if (!confirm("确定删除这道题及其全部历史版本吗？")) return;
+        try {
+          await request(`/api/question_bank/${rootId}`, { method: "DELETE" });
+          showToast("题库题目已删除。");
+          await loadBank();
+        } catch (error) { showToast(error.message, true); }
+      }
+
+      async function showUsage(rootId) {
+        try {
+          const data = await request(`/api/question_bank/${rootId}/usage`);
+          const content = data.surveys.length
+            ? `<div class="usage-list">${data.surveys.map((survey) => `<div class="stat-item"><a href="stats.html?id=${encodeURIComponent(survey.survey_id)}" target="_blank">${escapeHtml(survey.title)}</a></div>`).join("")}</div>`
+            : "<p>该题尚未被任何问卷使用。</p>";
+          openDialog("引用该题的问卷", content);
+        } catch (error) { showToast(error.message, true); }
+      }
+
+      async function showStats(rootId) {
+        try {
+          const data = await request(`/api/question_bank/${rootId}/stats`);
+          const questions = Array.isArray(data.questions) ? data.questions : [];
+          const versionOptions = questions.map((question) => `<option value="${escapeHtml(question.bank_version)}">v${escapeHtml(question.bank_version)} · ${escapeHtml(typeLabels[question.question_type] || question.question_type)}</option>`).join("");
+          const content = `<div id="bank-stats-summary" class="meta"></div><label>版本切换<select id="bank-stats-version">${versionOptions}</select></label><div id="bank-stats-version-content"></div><h4>该版本引用的问卷及回答数</h4><div id="bank-stats-surveys" class="usage-list"></div>`;
+          openDialog("跨问卷统计", content);
+          const versionSelect = document.querySelector("#bank-stats-version");
+          const versionContent = document.querySelector("#bank-stats-version-content");
+          const summary = document.querySelector("#bank-stats-summary");
+          const surveyList = document.querySelector("#bank-stats-surveys");
+          const renderVersionStats = (version) => {
+            const selected = questions.find((question) => String(question.bank_version) === String(version));
+            versionContent.replaceChildren();
+            surveyList.replaceChildren();
+            if (!selected) {
+              summary.textContent = "总引用数：0 份问卷；总回答数：0 份。";
+              versionContent.innerHTML = "<p>该版本暂无统计数据。</p>";
+              surveyList.innerHTML = "<p>该版本暂无引用问卷。</p>";
+              return;
+            }
+            summary.textContent = `总引用数：${selected.total_survey_count || 0} 份问卷；总回答数：${selected.total_response_count || 0} 份。`;
+            versionContent.innerHTML = renderBankStatsQuestion(selected);
+            const surveyBreakdown = Array.isArray(selected.survey_breakdown)
+              ? selected.survey_breakdown
+              : [];
+            surveyList.innerHTML = surveyBreakdown.map((survey) => `<div class="survey-stat-row"><a href="stats.html?id=${encodeURIComponent(survey.survey_id)}" target="_blank" rel="noopener">${escapeHtml(survey.title)}</a><strong>${survey.response_count || 0} 份回答</strong></div>`).join("") || "<p>该版本暂无引用问卷。</p>";
+          };
+          versionSelect.addEventListener("change", (event) => renderVersionStats(event.currentTarget.value));
+          if (versionOptions) {
+            renderVersionStats(versionSelect.value);
+          } else {
+            versionSelect.disabled = true;
+            versionContent.innerHTML = "<p>该题目尚无版本统计数据。</p>";
+          }
+        } catch (error) { showToast(error.message, true); }
+      }
+
+      function renderBankStatsQuestion(question) {
+        let detail = "";
+        const statistics = question.statistics || {};
+        if (question.question_type === "single_choice" || question.question_type === "multiple_choice") {
+          detail = (statistics.options || []).map((option) => `<div class="option"><span>${escapeHtml(option.label || option.value)}</span><strong>${option.count} 次</strong></div>`).join("") || "暂无选项数据";
+        } else if (question.question_type === "text") {
+          const values = statistics.responses || [];
+          detail = values.length ? `<ul class="value-list">${values.map((value) => `<li>${escapeHtml(value)}</li>`).join("")}</ul>` : "暂无文本回答";
+        } else if (question.question_type === "number") {
+          const stat = statistics;
+          detail = `<div class="number-stat"><span>填写次数：${stat.count || 0}</span><span>总和：${stat.total || 0}</span><span>平均值：${stat.average ?? "暂无"}</span></div>`;
+        }
+        return `<div class="stat-item"><strong>v${question.bank_version} · ${escapeHtml(question.title)}</strong><div class="meta">${escapeHtml(typeLabels[question.question_type] || question.question_type)} · 该版本答卷数：${question.version_responses || 0}</div>${detail}</div>`;
+      }
+
+      document.querySelector("#bank-form").addEventListener("submit", async (event) => {
+        event.preventDefault();
+        const type = document.querySelector("#question-type").value;
+        const isChoice = ["single_choice", "multiple_choice"].includes(type);
+        const optionValues = isChoice ? [...document.querySelectorAll(".option-input")].map((input) => input.value.trim()).filter(Boolean) : [];
+        if (isChoice && optionValues.length < 2) { showToast("选择题至少需要两个选项。", true); return; }
+        const config = {
+          options: optionValues.map((value) => ({ value, label: value })),
+          min_length: type === "text" ? Number(document.querySelector("#min-length").value || 0) : null,
+          max_length: type === "text" ? Number(document.querySelector("#max-length").value || 0) : null,
+          min_value: type === "number" && document.querySelector("#min-value").value !== "" ? Number(document.querySelector("#min-value").value) : null,
+          max_value: type === "number" && document.querySelector("#max-value").value !== "" ? Number(document.querySelector("#max-value").value) : null,
+          is_integer: type === "number" && document.querySelector("#is-integer").checked
+        };
+        if (type === "multiple_choice") {
+          config.min_selected = Number(document.querySelector("#min-selected").value || 0);
+          config.max_selected = Number(document.querySelector("#max-selected").value || optionValues.length);
+        }
+        try {
+          await request("/api/question_bank", { method: "POST", body: JSON.stringify({ title: document.querySelector("#title").value.trim(), question_type: type, is_required: document.querySelector("#is-required").checked, config, routing_rules: [] }) });
+          event.target.reset(); resetOptions(); updateConfigVisibility(); showToast("题目已保存到题库。"); await loadBank();
+        } catch (error) { showToast(error.message, true); }
+      });
+
+      document.querySelector("#question-type").addEventListener("change", updateConfigVisibility);
+      document.querySelector("#add-option").addEventListener("click", () => createOptionRow());
+      resetOptions();
+      updateConfigVisibility();
+      loadBank();
+    </script>
+  </body>
+</html>
