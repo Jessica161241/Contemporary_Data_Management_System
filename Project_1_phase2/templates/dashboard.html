@@ -1,0 +1,347 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>问卷系统 · 控制台</title>
+    <style>
+      :root {
+        font-family:
+          system-ui,
+          -apple-system,
+          "Segoe UI",
+          sans-serif;
+        color: #172033;
+        background: #f4f6f9;
+      }
+      body {
+        max-width: 900px;
+        margin: 0 auto;
+        padding: 32px 18px 60px;
+      }
+      header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        margin-bottom: 28px;
+      }
+      h1,
+      h2 {
+        margin: 0;
+      }
+      h1 {
+        font-size: 27px;
+      }
+      h2 {
+        font-size: 18px;
+      }
+      button,
+      .link {
+        border: 0;
+        border-radius: 7px;
+        padding: 9px 13px;
+        color: #fff;
+        background: #2563eb;
+        font: inherit;
+        cursor: pointer;
+        text-decoration: none;
+      }
+      button.muted {
+        color: #334155;
+        background: #e2e8f0;
+      }
+      section {
+        margin-bottom: 22px;
+        padding: 22px;
+        background: #fff;
+        border: 1px solid #e2e6ed;
+        border-radius: 10px;
+      }
+      form {
+        display: grid;
+        gap: 12px;
+        margin-top: 16px;
+      }
+      input,
+      textarea {
+        width: 100%;
+        box-sizing: border-box;
+        padding: 10px;
+        border: 1px solid #ccd3df;
+        border-radius: 7px;
+        font: inherit;
+      }
+      textarea {
+        min-height: 90px;
+        resize: vertical;
+      }
+      .checkbox-label {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        cursor: pointer;
+        margin: 4px 0;
+      }
+      .checkbox-label input {
+        width: auto;
+      }
+      .survey {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        padding: 14px 0;
+        border-top: 1px solid #edf0f4;
+      }
+      .survey:first-child {
+        border-top: 0;
+      }
+      .survey-title {
+        font-weight: 650;
+      }
+      .meta {
+        margin-top: 5px;
+        color: #687386;
+        font-size: 13px;
+      }
+      .actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+      .actions button,
+      .actions .link {
+        padding: 8px 10px;
+        font-size: 13px;
+      }
+      .actions button.copy {
+        color: #334155;
+        background: #e2e8f0;
+      }
+      .actions button.danger {
+        color: #991b1b;
+        background: #fee2e2;
+      }
+      .actions button.close {
+        color: #9a3412;
+        background: #ffedd5;
+      }
+      #message {
+        min-height: 22px;
+        color: #c2410c;
+      }
+      @media (max-width: 600px) {
+        .survey,
+        header {
+          align-items: flex-start;
+          flex-direction: column;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>我的问卷</h1>
+      <button id="logout" class="muted" type="button">退出登录</button>
+    </header>
+
+    <section>
+      <h2>创建问卷</h2>
+      <form id="create-form">
+        <input id="title" placeholder="问卷标题" required />
+        <textarea id="description" placeholder="问卷说明"></textarea>
+        <label class="checkbox-label"
+          ><input id="allow-anonymous" type="checkbox" checked />
+          允许匿名填写</label
+        >
+        <label for="deadline">截止时间（可选）</label>
+        <input id="deadline" type="datetime-local" />
+        <button type="submit">初始化并开始编辑问卷</button>
+      </form>
+      <p id="message" role="status"></p>
+    </section>
+
+    <section>
+      <h2>问卷列表</h2>
+      <div id="survey-list">正在加载...</div>
+    </section>
+
+    <script>
+      const API_BASE = "http://localhost:5000";
+      const token = localStorage.getItem("token");
+      if (!token) window.location.href = "login.html";
+
+      const headers = () => ({
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${localStorage.getItem("token")}`,
+      });
+      const escapeHtml = (value) =>
+        String(value ?? "").replace(
+          /[&<>'"]/g,
+          (char) =>
+            ({
+              "&": "&amp;",
+              "<": "&lt;",
+              ">": "&gt;",
+              "'": "&#39;",
+              '"': "&quot;",
+            })[char],
+        );
+      const formatDeadline = (value) =>
+        value ? new Date(value).toLocaleString() : "未设置";
+
+      async function request(path, options = {}) {
+        const response = await fetch(`${API_BASE}${path}`, {
+          ...options,
+          headers: { ...headers(), ...(options.headers || {}) },
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(data.error || "请求失败");
+        return data;
+      }
+
+      async function loadSurveys() {
+        const list = document.querySelector("#survey-list");
+        try {
+          const data = await request("/api/surveys");
+          if (!data.surveys.length) {
+            list.textContent = "还没有问卷。";
+            return;
+          }
+          list.innerHTML = data.surveys
+            .map(
+              (survey) => `
+          <article class="survey">
+            <div><div class="survey-title">${escapeHtml(survey.title)}</div><div class="meta">${escapeHtml(survey.status)} · ${escapeHtml(survey.description)}</div><div class="meta">截止：${escapeHtml(formatDeadline(survey.deadline))}</div></div>
+            <div class="actions">
+              ${
+                survey.status === "draft"
+                  ? `
+                <a class="link" href="edit.html?id=${encodeURIComponent(survey.id)}">编辑题目</a>
+                <button class="publish" data-id="${survey.id}" type="button">发布</button>
+                <button class="delete danger" data-id="${survey.id}" type="button">删除</button>
+                <a class="link" href="fill.html?id=${encodeURIComponent(survey.id)}&preview=1" target="_blank">预览</a>
+                <a class="link" href="stats.html?id=${encodeURIComponent(survey.id)}">查看统计</a>
+              `
+                  : survey.status === "published"
+                    ? `
+                <button class="close" data-id="${survey.id}" type="button">关闭问卷</button>
+                <button class="copy" data-id="${survey.id}" type="button">复制链接</button>
+                <a class="link" href="fill.html?id=${encodeURIComponent(survey.id)}" target="_blank">填写</a>
+                <a class="link" href="stats.html?id=${encodeURIComponent(survey.id)}">查看统计</a>
+              `
+                    : `<a class="link" href="stats.html?id=${encodeURIComponent(survey.id)}">查看统计</a>`
+              }
+            </div>
+          </article>`,
+            )
+            .join("");
+          document
+            .querySelectorAll(".publish")
+            .forEach((button) =>
+              button.addEventListener("click", () =>
+                publishSurvey(button.dataset.id),
+              ),
+            );
+          document
+            .querySelectorAll(".close")
+            .forEach((button) =>
+              button.addEventListener("click", () =>
+                closeSurvey(button.dataset.id),
+              ),
+            );
+          document
+            .querySelectorAll(".delete")
+            .forEach((button) =>
+              button.addEventListener("click", () =>
+                deleteSurvey(button.dataset.id),
+              ),
+            );
+          document
+            .querySelectorAll(".copy")
+            .forEach((button) =>
+              button.addEventListener("click", () =>
+                copySurveyLink(button.dataset.id),
+              ),
+            );
+        } catch (error) {
+          list.textContent = error.message;
+        }
+      }
+
+      async function publishSurvey(id) {
+        try {
+          await request(`/api/surveys/${id}/publish`, { method: "PUT" });
+          await loadSurveys();
+        } catch (error) {
+          document.querySelector("#message").textContent = error.message;
+        }
+      }
+
+      async function closeSurvey(id) {
+        if (!confirm("确定要关闭这份问卷吗？关闭后不能继续填写。")) return;
+        try {
+          await request(`/api/surveys/${id}/close`, { method: "PUT" });
+          await loadSurveys();
+        } catch (error) {
+          document.querySelector("#message").textContent = error.message;
+        }
+      }
+
+      async function deleteSurvey(id) {
+        if (!confirm("确定删除这份草稿问卷吗？此操作不可撤销。")) return;
+        try {
+          await request(`/api/surveys/${id}`, { method: "DELETE" });
+          await loadSurveys();
+        } catch (error) {
+          document.querySelector("#message").textContent = error.message;
+        }
+      }
+
+      async function copySurveyLink(id) {
+        const link = `${window.location.origin}/fill.html?id=${encodeURIComponent(id)}`;
+        try {
+          if (!navigator.clipboard) throw new Error("当前浏览器不支持自动复制");
+          await navigator.clipboard.writeText(link);
+          document.querySelector("#message").textContent = "链接已复制";
+        } catch (error) {
+          document.querySelector("#message").textContent =
+            `${error.message}：${link}`;
+        }
+      }
+
+      document
+        .querySelector("#create-form")
+        .addEventListener("submit", async (event) => {
+          event.preventDefault();
+          try {
+            const deadlineValue = document.querySelector("#deadline").value;
+            await request("/api/surveys", {
+              method: "POST",
+              body: JSON.stringify({
+                title: document.querySelector("#title").value,
+                description: document.querySelector("#description").value,
+                allow_anonymous:
+                  document.querySelector("#allow-anonymous").checked,
+                deadline: deadlineValue
+                  ? new Date(deadlineValue).toISOString()
+                  : null,
+              }),
+            });
+            event.target.reset();
+            document.querySelector("#message").textContent = "创建成功。";
+            await loadSurveys();
+          } catch (error) {
+            document.querySelector("#message").textContent = error.message;
+          }
+        });
+
+      document.querySelector("#logout").addEventListener("click", () => {
+        localStorage.removeItem("token");
+        window.location.href = "login.html";
+      });
+      loadSurveys();
+    </script>
+  </body>
+</html>

@@ -1,0 +1,450 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>填写问卷</title>
+    <style>
+      :root {
+        font-family:
+          system-ui,
+          -apple-system,
+          "Segoe UI",
+          sans-serif;
+        color: #172033;
+        background: #f4f6f9;
+      }
+      body {
+        max-width: 760px;
+        margin: 0 auto;
+        padding: 32px 18px 60px;
+      }
+      main {
+        padding: 24px;
+        background: #fff;
+        border: 1px solid #e2e6ed;
+        border-radius: 10px;
+      }
+      h1 {
+        margin: 0;
+        font-size: 27px;
+      }
+      #description {
+        color: #687386;
+      }
+      #preview-banner {
+        display: none;
+        margin-bottom: 18px;
+        padding: 12px 14px;
+        border: 1px solid #facc15;
+        border-radius: 7px;
+        color: #854d0e;
+        background: #fef9c3;
+      }
+      #jump-toast {
+        visibility: hidden;
+        opacity: 0;
+        margin: 12px 0 18px;
+        padding: 11px 14px;
+        border: 1px solid #93c5fd;
+        border-radius: 7px;
+        color: #1e40af;
+        background: #dbeafe;
+        transition:
+          opacity 0.3s ease,
+          visibility 0.3s ease;
+      }
+      #jump-toast.show {
+        visibility: visible;
+        opacity: 1;
+      }
+      .question {
+        padding: 20px 0;
+        border-top: 1px solid #edf0f4;
+      }
+      .question:first-child {
+        margin-top: 20px;
+      }
+      legend,
+      .question-title {
+        margin-bottom: 10px;
+        font-weight: 650;
+      }
+      .required {
+        color: #dc2626;
+      }
+      label {
+        display: block;
+        margin: 9px 0;
+      }
+      input[type="text"],
+      input[type="number"],
+      textarea {
+        width: 100%;
+        box-sizing: border-box;
+        padding: 10px;
+        border: 1px solid #ccd3df;
+        border-radius: 7px;
+        font: inherit;
+      }
+      textarea {
+        min-height: 100px;
+        resize: vertical;
+      }
+      button {
+        padding: 11px 18px;
+        border: 0;
+        border-radius: 7px;
+        color: #fff;
+        background: #2563eb;
+        font: inherit;
+        cursor: pointer;
+      }
+      #message {
+        min-height: 24px;
+        color: #c2410c;
+      }
+      .unit {
+        color: #687386;
+        font-size: 14px;
+      }
+      .routing-hint {
+        margin-top: 12px;
+        color: #687386;
+        font-size: 13px;
+        line-height: 1.6;
+      }
+      .routing-hint strong {
+        font-weight: 600;
+      }
+      @keyframes jump-highlight {
+        0% {
+          background: #fef3c7;
+        }
+        100% {
+          background: transparent;
+        }
+      }
+      .question.jump-highlight {
+        animation: jump-highlight 1.4s ease-out;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <div id="preview-banner">当前处于预览模式</div>
+      <h1 id="title">正在加载...</h1>
+      <div id="jump-toast" role="status">⚡ 已触发条件跳转</div>
+      <p id="description"></p>
+      <form id="survey-form"></form>
+      <p id="message" role="status"></p>
+    </main>
+    <script>
+      const API_BASE = "http://localhost:5000";
+      const query = new URLSearchParams(window.location.search);
+      const surveyId = query.get("id");
+      const previewMode = query.get("preview") === "1";
+      let questions = [];
+      let previousVisibleIds = null;
+      let jumpToastTimer = null;
+      const escapeHtml = (value) =>
+        String(value ?? "").replace(
+          /[&<>'"]/g,
+          (char) =>
+            ({
+              "&": "&amp;",
+              "<": "&lt;",
+              ">": "&gt;",
+              "'": "&#39;",
+              '"': "&quot;",
+            })[char],
+        );
+      const escapeAttribute = (value) => escapeHtml(value);
+
+      async function loadSurvey() {
+        if (!surveyId) throw new Error("缺少问卷 ID");
+        const requestHeaders = {};
+        const token = localStorage.getItem("token");
+        if (token) requestHeaders.Authorization = `Bearer ${token}`;
+        const response = await fetch(
+          `${API_BASE}/api/surveys/${encodeURIComponent(surveyId)}/fill`,
+          { headers: requestHeaders },
+        );
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(data.error || "问卷加载失败");
+        questions = data.questions;
+        document.querySelector("#title").textContent = data.survey.title;
+        document.querySelector("#description").textContent =
+          data.survey.description || "";
+        document.querySelector("#preview-banner").style.display = previewMode
+          ? "block"
+          : "none";
+        document.querySelector("#survey-form").innerHTML =
+          questions.map(renderQuestion).join("") +
+          '<button type="submit">提交答卷</button>';
+        updateVisiblePath(false);
+      }
+
+      function renderQuestion(question) {
+        const id = escapeAttribute(question.id);
+        const required = question.is_required
+          ? '<span class="required"> *</span>'
+          : "";
+        const config = question.config || {};
+        let control = "";
+        if (
+          question.question_type === "single_choice" ||
+          question.question_type === "multiple_choice"
+        ) {
+          const inputType =
+            question.question_type === "single_choice" ? "radio" : "checkbox";
+          control = (config.options || [])
+            .map(
+              (option, index) =>
+                `<label><input data-question-id="${id}" type="${inputType}" name="question-${id}" value="${escapeAttribute(option.value)}" ${question.is_required && question.question_type === "single_choice" && index === 0 ? "required" : ""}> ${escapeHtml(option.label)}</label>`,
+            )
+            .join("");
+        } else if (question.question_type === "text") {
+          control = `<textarea data-question-id="${id}" name="question-${id}" ${question.is_required ? "required" : ""} ${config.min_length !== undefined && config.min_length !== null ? `minlength="${config.min_length}"` : ""} ${config.max_length !== undefined && config.max_length !== null ? `maxlength="${config.max_length}"` : ""}></textarea>`;
+        } else if (question.question_type === "number") {
+          control = `<input data-question-id="${id}" name="question-${id}" type="number" ${question.is_required ? "required" : ""} ${config.min_value !== undefined && config.min_value !== null ? `min="${config.min_value}"` : ""} ${config.max_value !== undefined && config.max_value !== null ? `max="${config.max_value}"` : ""} ${config.is_integer || config.integer_only ? 'step="1"' : 'step="any"'}>`;
+        }
+        const routingHint = renderRoutingHint(question);
+        return `<fieldset class="question" data-question-id="${id}"><legend>${escapeHtml(question.title)}${required}</legend>${control}${config.unit ? `<span class="unit">单位：${escapeHtml(config.unit)}</span>` : ""}${routingHint}</fieldset>`;
+      }
+
+      function renderRoutingHint(question) {
+        const rules = question.routing_rules || [];
+        if (!rules.length) return "";
+        const lines = rules
+          .map((rule) => {
+            const condition = (rule.conditions || [])[0] || {};
+            let conditionText = condition.value ?? "满足条件";
+            if (condition.operator === "between")
+              conditionText = `${condition.min_value} 至 ${condition.max_value}`;
+            const action = rule.action || {};
+            let targetText = "下一题";
+            if (action.type === "end") targetText = "提前结束";
+            else if (
+              action.target_question_id &&
+              action.target_question_id !== "__NEXT__"
+            ) {
+              const target = questions.find(
+                (item) => item.id === action.target_question_id,
+              );
+              targetText = target ? `第 ${target.order} 题` : "指定题目";
+            }
+            return `${escapeHtml(conditionText)} → ${targetText}`;
+          })
+          .join("；");
+        return `<div class="routing-hint"><strong>该题设有条件跳转，将根据您的回答自动切换</strong><br>${lines}</div>`;
+      }
+
+      function getAnswerValue(question) {
+        const controls = [
+          ...document.querySelectorAll(
+            `[data-question-id="${question.id}"] input, [data-question-id="${question.id}"] textarea`,
+          ),
+        ];
+        if (question.question_type === "multiple_choice")
+          return controls
+            .filter((control) => control.checked)
+            .map((control) => control.value);
+        if (question.question_type === "single_choice")
+          return controls.find((control) => control.checked)?.value || "";
+        if (question.question_type === "number")
+          return controls[0]?.value === "" ? null : Number(controls[0]?.value);
+        return controls[0]?.value || "";
+      }
+
+      function ruleMatches(rule, question, value) {
+        return (rule.conditions || []).every((condition) => {
+          if (
+            condition.question_id !== "__CURRENT_QUESTION__" &&
+            condition.question_id !== question.id
+          )
+            return false;
+          if (condition.operator === "equals") return value === condition.value;
+          if (condition.operator === "contains")
+            return Array.isArray(value) && value.includes(condition.value);
+          if (condition.operator === "greater_than")
+            return typeof value === "number" && value > condition.value;
+          if (condition.operator === "less_than")
+            return typeof value === "number" && value < condition.value;
+          if (condition.operator === "between") {
+            if (typeof value !== "number") return false;
+            const lower =
+              condition.include_min === false
+                ? value > condition.min_value
+                : value >= condition.min_value;
+            const upper =
+              condition.include_max === false
+                ? value < condition.max_value
+                : value <= condition.max_value;
+            return lower && upper;
+          }
+          return false;
+        });
+      }
+
+      function showJumpFeedback(visibleIds, previousIds) {
+        const toast = document.querySelector("#jump-toast");
+        toast.classList.add("show");
+        clearTimeout(jumpToastTimer);
+        jumpToastTimer = setTimeout(() => toast.classList.remove("show"), 2000);
+
+        const newlyVisible = questions.filter(
+          (question) =>
+            visibleIds.has(question.id) && !previousIds.has(question.id),
+        );
+        const targetQuestion =
+          newlyVisible[0] ||
+          questions.find((question) => visibleIds.has(question.id));
+        if (!targetQuestion) return;
+        const targetElement = document.querySelector(
+          `.question[data-question-id="${targetQuestion.id}"]`,
+        );
+        if (!targetElement) return;
+        targetElement.classList.remove("jump-highlight");
+        void targetElement.offsetWidth;
+        targetElement.classList.add("jump-highlight");
+        const firstVisibleElement = document.querySelector(
+          ".question:not([hidden])",
+        );
+        (firstVisibleElement || targetElement).scrollIntoView({
+          behavior: "smooth",
+          block: "center",
+        });
+      }
+
+      function updateVisiblePath(showFeedback = true) {
+        questions.forEach((question) => {
+          const fieldset = document.querySelector(
+            `.question[data-question-id="${question.id}"]`,
+          );
+          if (fieldset) fieldset.hidden = false;
+        });
+        const visibleIds = new Set();
+        const visitedIndexes = new Set();
+        let index = 0;
+        while (
+          index >= 0 &&
+          index < questions.length &&
+          !visitedIndexes.has(index)
+        ) {
+          visitedIndexes.add(index);
+          const question = questions[index];
+          visibleIds.add(question.id);
+          const value = getAnswerValue(question);
+          const rule = (question.routing_rules || [])
+            .slice()
+            .sort((left, right) => (left.priority || 0) - (right.priority || 0))
+            .find((candidate) => ruleMatches(candidate, question, value));
+          if (!rule) {
+            index += 1;
+            continue;
+          }
+          if (!rule.action || rule.action.type === "end") break;
+
+          const target = rule.action.target_question_id;
+          if (!target || target === "__NEXT__") index += 1;
+          else index = questions.findIndex((item) => item.id === target);
+          if (index < 0) break;
+        }
+
+        questions.forEach((question) => {
+          const fieldset = document.querySelector(
+            `.question[data-question-id="${question.id}"]`,
+          );
+          if (fieldset) fieldset.hidden = !visibleIds.has(question.id);
+        });
+        const pathChanged =
+          previousVisibleIds &&
+          (visibleIds.size !== previousVisibleIds.size ||
+            [...visibleIds].some((id) => !previousVisibleIds.has(id)));
+        if (showFeedback && pathChanged) {
+          showJumpFeedback(visibleIds, previousVisibleIds);
+        }
+        previousVisibleIds = visibleIds;
+      }
+
+      const surveyForm = document.querySelector("#survey-form");
+      surveyForm.addEventListener("change", (event) => {
+        if (
+          event.target.matches(
+            'input[type="radio"], input[type="number"], input[type="checkbox"]',
+          )
+        )
+          updateVisiblePath();
+      });
+      surveyForm.addEventListener("input", (event) => {
+        if (event.target.matches('input[type="number"]')) updateVisiblePath();
+      });
+
+      surveyForm.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        if (previewMode) {
+          document.querySelector("#message").textContent =
+            "预览模式：交互成功，但数据不会被保存";
+          return;
+        }
+        const visibleQuestions = questions.filter((question) => {
+          const fieldset = document.querySelector(
+            `.question[data-question-id="${question.id}"]`,
+          );
+          return fieldset && !fieldset.hidden;
+        });
+        const answers = visibleQuestions.map((question) => {
+          const controls = [
+            ...document.querySelectorAll(
+              `[data-question-id="${question.id}"] input, [data-question-id="${question.id}"] textarea`,
+            ),
+          ];
+          let value;
+          if (question.question_type === "multiple_choice")
+            value = controls
+              .filter((control) => control.checked)
+              .map((control) => control.value);
+          else if (question.question_type === "single_choice")
+            value = controls.find((control) => control.checked)?.value || "";
+          else if (question.question_type === "number")
+            value = controls[0].value === "" ? "" : Number(controls[0].value);
+          else value = controls[0]?.value || "";
+          return { question_id: question.id, value };
+        });
+        try {
+          const headers = { "Content-Type": "application/json" };
+          const token = localStorage.getItem("token");
+          if (token) headers.Authorization = `Bearer ${token}`;
+          const response = await fetch(
+            `${API_BASE}/api/surveys/${encodeURIComponent(surveyId)}/submit`,
+            {
+              method: "POST",
+              headers,
+              body: JSON.stringify({
+                answers,
+                visited_question_ids: visibleQuestions.map(
+                  (question) => question.id,
+                ),
+              }),
+            },
+          );
+          const data = await response.json().catch(() => ({}));
+          if (!response.ok)
+            throw new Error(
+              data.details ? data.details.join("；") : data.error || "提交失败",
+            );
+          document.querySelector("#message").textContent = "答卷提交成功。";
+          event.target.querySelector("button[type=submit]").disabled = true;
+        } catch (error) {
+          document.querySelector("#message").textContent = error.message;
+        }
+      });
+
+      loadSurvey().catch((error) => {
+        document.querySelector("#title").textContent = "无法加载问卷";
+        document.querySelector("#message").textContent = error.message;
+      });
+    </script>
+  </body>
+</html>

@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>问卷系统 · 统计结果</title>
+    <style>
+      :root {
+        font-family:
+          system-ui,
+          -apple-system,
+          "Segoe UI",
+          sans-serif;
+        color: #172033;
+        background: #f4f6f9;
+      }
+      body {
+        max-width: 900px;
+        margin: 0 auto;
+        padding: 32px 18px 60px;
+      }
+      header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        margin-bottom: 24px;
+      }
+      h1,
+      h2 {
+        margin: 0;
+      }
+      h1 {
+        font-size: 27px;
+      }
+      h2 {
+        font-size: 18px;
+      }
+      section {
+        margin-bottom: 18px;
+        padding: 22px;
+        background: #fff;
+        border: 1px solid #e2e6ed;
+        border-radius: 10px;
+      }
+      .back-link {
+        padding: 10px 14px;
+        border-radius: 7px;
+        color: #334155;
+        background: #e2e8f0;
+        text-decoration: none;
+      }
+      .total {
+        margin-top: 8px;
+        color: #2563eb;
+        font-size: 15px;
+      }
+      .question {
+        margin-top: 16px;
+        padding-top: 16px;
+        border-top: 1px solid #edf0f4;
+      }
+      .question:first-child {
+        margin-top: 0;
+        padding-top: 0;
+        border-top: 0;
+      }
+      .question-title {
+        font-weight: 650;
+      }
+      .type {
+        color: #687386;
+        font-size: 13px;
+      }
+      .option {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 12px;
+        margin-top: 9px;
+        padding: 9px 10px;
+        background: #f8fafc;
+        border-radius: 6px;
+      }
+      .value-list {
+        margin: 10px 0 0;
+        padding-left: 20px;
+        color: #475569;
+      }
+      .number-stat {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 18px;
+        margin-top: 10px;
+        color: #475569;
+      }
+      #message {
+        color: #c2410c;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1 id="title">统计结果</h1>
+      <a class="back-link" href="dashboard.html">返回控制台</a>
+    </header>
+    <section>
+      <div id="message">正在加载...</div>
+      <div id="total" class="total"></div>
+      <div id="stats"></div>
+    </section>
+
+    <script>
+      const API_BASE = "http://localhost:5000";
+      const surveyId = new URLSearchParams(window.location.search).get("id");
+      const token = localStorage.getItem("token");
+      const typeLabels = {
+        single_choice: "单选",
+        multiple_choice: "多选",
+        text: "文本",
+        number: "数字",
+      };
+      const escapeHtml = (value) =>
+        String(value ?? "").replace(
+          /[&<>'"]/g,
+          (char) =>
+            ({
+              "&": "&amp;",
+              "<": "&lt;",
+              ">": "&gt;",
+              "'": "&#39;",
+              '"': "&quot;",
+            })[char],
+        );
+
+      async function loadStats() {
+        if (!token) {
+          window.location.href = "login.html";
+          return;
+        }
+        if (!surveyId) throw new Error("缺少问卷 ID");
+        const response = await fetch(
+          `${API_BASE}/api/surveys/${encodeURIComponent(surveyId)}/stats`,
+          { headers: { Authorization: `Bearer ${token}` } },
+        );
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(data.error || "统计结果加载失败");
+        document.querySelector("#title").textContent =
+          `${data.survey_title} · 统计结果`;
+        document.querySelector("#total").textContent =
+          `总答卷数：${data.total_responses}`;
+        document.querySelector("#stats").innerHTML =
+          data.questions.map(renderQuestionStats).join("") || "暂无题目统计。";
+        document.querySelector("#message").textContent = "";
+      }
+
+      function renderQuestionStats(question) {
+        let content = "";
+        if (
+          question.question_type === "single_choice" ||
+          question.question_type === "multiple_choice"
+        ) {
+          content =
+            (question.statistics.options || [])
+              .map(
+                (option) =>
+                  `<div class="option"><span>${escapeHtml(option.label || option.value)}</span><strong>${option.count} 次</strong></div>`,
+              )
+              .join("") || "暂无选项数据";
+        } else if (question.question_type === "text") {
+          const values = question.statistics.responses || [];
+          content = values.length
+            ? `<ul class="value-list">${values.map((value) => `<li>${escapeHtml(value)}</li>`).join("")}</ul>`
+            : "暂无文本回答";
+        } else if (question.question_type === "number") {
+          const stat = question.statistics || {};
+          content = `<div class="number-stat"><span>填写次数：${stat.count || 0}</span><span>总和：${stat.total || 0}</span><span>平均值：${stat.average ?? "暂无"}</span></div>`;
+        }
+        return `<article class="question"><div class="question-title">${escapeHtml(question.title)}</div><div class="type">${escapeHtml(typeLabels[question.question_type] || question.question_type)}</div>${content}</article>`;
+      }
+
+      loadStats().catch((error) => {
+        document.querySelector("#message").textContent = error.message;
+      });
+    </script>
+  </body>
+</html>
